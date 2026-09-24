@@ -16,16 +16,19 @@ github-token-utilities/
 │   └── dist/<host>/github-token-utilities/   # generated variants, do not edit
 ├── scripts/
 │   ├── build-skills.mjs     # render core → dist and validate against the spec
-│   └── install-skills.mjs   # copy a variant into a host's skills folder
+│   ├── install-skills.mjs   # copy a variant into a host's skills folder
+│   └── package-release.mjs  # build release assets (tgz, zips, SHA256SUMS, notes) into release/
 ├── tests/
 │   ├── lib.test.mjs         # unit tests for gh-token-lib.mjs
 │   ├── cli.test.mjs         # end-to-end tests against a fake gh
 │   ├── skills.test.mjs      # skill rendering and portability tests
-│   └── shells.test.mjs      # generated files loaded in real bash/zsh/sh/dash/ksh/fish/csh/tcsh/pwsh
+│   ├── shells.test.mjs      # generated files loaded in real bash/zsh/sh/dash/ksh/fish/csh/tcsh/pwsh
+│   └── release.test.mjs     # release notes extraction and tag/version guard
 ├── docs/
 │   └── EVIDENCE.md          # every external behavior relied on, with sources
 ├── .github/
 │   ├── workflows/ci.yml     # tests on Ubuntu/macOS/Windows × Node 22/24; skill validation
+│   ├── workflows/release.yml # on v* tags: CI, build assets, attest, publish GitHub Release
 │   └── dependabot.yml       # weekly GitHub Actions + npm updates
 ├── README.md
 ├── QUICKSTART.md

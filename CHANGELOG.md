@@ -18,6 +18,13 @@ All notable changes to this project are documented here. The format follows
   - adds or replaces `GITHUB_TOKEN` and the `GITHUB_PERSONAL_ACCESS_TOKEN` reference.
 - The current `gh` account is detected from the stored `gh` login first, so an expired
   `GITHUB_TOKEN` in the environment doesn't get in the way.
+- **GitHub Releases**, published automatically when a `v*` tag is pushed:
+  - the release runs the full CI matrix first;
+  - it attaches an npm tarball (`npm install -g <url>`), a zip, one skill zip per agent host,
+    and `SHA256SUMS`;
+  - it adds signed build provenance and uses this CHANGELOG section as release notes.
+
+  `npm run package` builds the same assets locally.
 
 ### Fixed
 

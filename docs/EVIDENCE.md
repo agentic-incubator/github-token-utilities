@@ -60,6 +60,15 @@ source that backs it. Verified on **2026-09-24**.
 | O9 | Node.js 20 reached end-of-life on 2026-04-30; 22 is supported until 2027-04-30 and 24 until 2028-04-30 | `package.json` `engines`, CI matrix | Documented | [nodejs/Release schedule](https://github.com/nodejs/Release#release-schedule) |
 | O10 | Clipboard access: `pbpaste`/`pbcopy` (macOS), `Get-Clipboard`/`Set-Clipboard` (PowerShell), `wl-paste`/`wl-copy` (Wayland), `xclip`/`xsel` (X11) | `clipboardCommands`, `readClipboard` | Documented, Tested here | [Get-Clipboard](https://learn.microsoft.com/powershell/module/microsoft.powershell.management/get-clipboard); [Set-Clipboard](https://learn.microsoft.com/powershell/module/microsoft.powershell.management/set-clipboard); `tests/lib.test.mjs` covers the tool order and fallbacks |
 
+## Release distribution
+
+| # | Behavior relied on | Implemented in | Status | Evidence |
+|---|---|---|---|---|
+| R1 | `npm pack` builds a tarball from package.json `files`, and `npm install -g <tarball URL>` installs its `bin` commands without a registry | `scripts/package-release.mjs`, README "From a release" | Documented, Tested here | [npm pack](https://docs.npmjs.com/cli/commands/npm-pack); [npm install](https://docs.npmjs.com/cli/commands/npm-install); the tarball was installed with `--prefix` into a temporary folder, and all four commands ran |
+| R2 | `gh release create TAG FILES --notes-file --verify-tag [--prerelease]` | `release.yml` | Documented | [gh release create](https://cli.github.com/manual/gh_release_create) |
+| R3 | `actions/attest-build-provenance` signs SLSA provenance (needs `id-token: write` and `attestations: write`); `gh attestation verify` checks it | `release.yml`; README verify step | Documented | [Artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds); [gh attestation verify](https://cli.github.com/manual/gh_attestation_verify) |
+| R4 | A workflow with `on: workflow_call` can be reused as a job (`uses: ./.github/workflows/ci.yml`) | `release.yml` → `ci.yml` | Documented | [Reusing workflows](https://docs.github.com/en/actions/sharing-automations/reusing-workflows) |
+
 ## Agent Skills format and hosts
 
 | # | Behavior relied on | Implemented in | Status | Evidence |

@@ -27,6 +27,8 @@ confirmation before it changes anything.
 - [What's included](#whats-included)
 - [Requirements](#requirements)
 - [Install](#install)
+  - [From a release](#from-a-release)
+  - [From source](#from-source)
 - [Usage](#usage)
   - [Generate a token](#generate-a-token)
   - [Audit tokens](#audit-tokens)
@@ -66,6 +68,41 @@ confirmation before it changes anything.
 > variable if it is stale.
 
 ## Install
+
+### From a release
+
+Every [release](https://github.com/agentic-incubator/github-token-utilities/releases) publishes:
+
+| Asset | Use |
+|---|---|
+| `github-token-utilities-<version>.tgz` | `npm install -g` it to get `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `store-gh-token` on your `PATH`. No npm registry is involved.[^npm-install] |
+| `github-token-utilities-<version>.zip` | The same files as a plain archive |
+| `github-token-utilities-skill-<host>-<version>.zip` | One per agent host. Unzip into that host's skills folder (see [AI agent skills](#ai-agent-skills)) |
+| `SHA256SUMS` | Checksums for all of the above |
+
+```bash
+V=3.1.0
+npm install -g "https://github.com/agentic-incubator/github-token-utilities/releases/download/v$V/github-token-utilities-$V.tgz"
+
+# Optional: verify the download was built by this repository's release workflow
+gh release download "v$V" -R agentic-incubator/github-token-utilities -p "*.tgz" -p SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+gh attestation verify "github-token-utilities-$V.tgz" -R agentic-incubator/github-token-utilities
+```
+
+Installing a skill from a release, for example for Claude Code:
+
+```bash
+gh release download "v$V" -R agentic-incubator/github-token-utilities -p "*-skill-claude-*.zip"
+unzip -o "github-token-utilities-skill-claude-$V.zip" -d ~/.claude/skills/
+```
+
+> [!NOTE]
+> An npm install puts the commands on your `PATH` directly, so you don't need `setup.mjs`.
+> The agent skills expect the scripts in your home directory (`node ~/audit.mjs`), so if you
+> use the skills, run `setup.mjs` from a clone (below) or let the skill do it.
+
+### From source
 
 ```bash
 git clone https://github.com/agentic-incubator/github-token-utilities.git ~/.local/share/github-token-utilities
@@ -464,6 +501,24 @@ variant against the Agent Skills rules[^agentskills-spec]:
 
 See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for a map of the repository.
 
+### Releasing
+
+1. Bump `version` in `package.json`, and add a matching `## [x.y.z]` section to
+   `CHANGELOG.md`. Its text becomes the release notes.
+2. `npm run build:skills && npm test`, then commit and push to `main`.
+3. Tag and push:
+
+   ```bash
+   git tag v3.1.0 && git push origin v3.1.0
+   ```
+
+[`release.yml`](.github/workflows/release.yml) then runs the full CI matrix. It fails if the
+tag doesn't match `package.json` or the CHANGELOG has no matching section. Otherwise it
+builds the assets with `npm run package`, signs build provenance,[^attest] and creates the
+GitHub Release.[^gh-release] Tags with a hyphen (`v3.2.0-rc.1`) are marked as prereleases.
+You can build the same assets locally with `npm run package`; they go in `release/`, which is
+git-ignored.
+
 ## Evidence and references
 
 Every behavior this toolkit relies on is traced to a public source in
@@ -500,6 +555,9 @@ only observed in practice, or undocumented. The sources cited above:
 [^dependabot]: GitHub Docs, *Dependabot options reference* (`package-ecosystem`, `schedule.interval`, `groups`). <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference>
 [^clipboard]: macOS `pbpaste`/`pbcopy`; Windows PowerShell `Get-Clipboard`/`Set-Clipboard` <https://learn.microsoft.com/powershell/module/microsoft.powershell.management/get-clipboard>; Linux `wl-paste` (Wayland), `xclip` or `xsel` (X11).
 [^token-expiry]: GitHub Docs, *Token expiration and revocation*: tokens unused for a year are revoked; GitHub App user tokens expire after 8 hours. <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation>
+[^npm-install]: npm Docs, *npm install*: installing from a tarball URL. <https://docs.npmjs.com/cli/commands/npm-install>
+[^attest]: GitHub Docs, *Using artifact attestations to establish provenance for builds*; `actions/attest-build-provenance`. <https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds>
+[^gh-release]: GitHub CLI manual, *gh release create* (`--verify-tag`, `--notes-file`, `--prerelease`). <https://cli.github.com/manual/gh_release_create>
 [^agentskills-spec]: Agent Skills specification: `SKILL.md` frontmatter fields and limits, directory layout. <https://agentskills.io/specification>
 [^claude-skills]: Claude Code Docs, *Skills*. <https://code.claude.com/docs/en/skills>
 [^codex-skills]: OpenAI Codex, *Build skills* (`~/.agents/skills`, `$skill-name`) <https://developers.openai.com/codex/skills>. Deprecated `$CODEX_HOME/skills` path: `codex-rs/ext/skills/src/host_roots.rs` in <https://github.com/openai/codex>

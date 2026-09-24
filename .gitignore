@@ -30,6 +30,9 @@ ruvector.db
 # skill-creator eval workspaces
 *-workspace/
 
+# ── Build output ───────────────────────────────────────────────────────────────
+release/
+
 # ── Node ──────────────────────────────────────────────────────────────────────
 node_modules/
 package-lock.json

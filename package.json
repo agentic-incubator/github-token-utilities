@@ -19,7 +19,8 @@
     "check:skills": "node scripts/build-skills.mjs --check",
     "install:skills": "node scripts/install-skills.mjs",
     "validate:skills": "node scripts/build-skills.mjs --check && for d in skills/dist/*/github-token-utilities; do uvx --from skills-ref agentskills validate \"$d\" || exit 1; done",
-    "store": "node store.mjs"
+    "store": "node store.mjs",
+    "package": "node scripts/package-release.mjs"
   },
   "keywords": [
     "github",
@@ -63,6 +64,9 @@
     "skills/",
     "scripts/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "QUICKSTART.md",
+    "CHANGELOG.md",
+    "docs/"
   ]
 }
