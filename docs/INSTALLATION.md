@@ -31,7 +31,7 @@ Every [release](https://github.com/agentic-incubator/github-token-utilities/rele
 | `SHA256SUMS` | Checksums for all of the above |
 
 ```bash
-V=3.3.0
+V=3.4.0
 npm install -g "https://github.com/agentic-incubator/github-token-utilities/releases/download/v$V/github-token-utilities-$V.tgz"
 
 # Optional: verify the download was built by this repository's release workflow

@@ -4,7 +4,7 @@
 
 Supported platforms, shells and agent hosts, and the exact versions verified.
 
-Version **3.3.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version **3.4.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 | Component | Supported | Verified with |
 |---|---|---|

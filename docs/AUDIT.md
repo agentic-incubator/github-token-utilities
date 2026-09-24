@@ -2,14 +2,14 @@
 
 [README](../README.md) › [Documentation](../README.md#documentation) › Guides › Audit
 
-`audit-gh-tokens` finds token-like Actions secrets across your repositories and checks the tokens stored on your machine. With `--all-secrets` it lists every secret instead, across your account and all your organizations. It is read-only.
+`audit-gh-tokens` finds token-like Actions secrets across your repositories and checks the tokens stored on your machine. With `--all-secrets` it lists every secret instead, across your account and the organizations you own. It is read-only.
 
 ```bash
 audit-gh-tokens                 # your repositories + local token files
 audit-gh-tokens my-org          # an organization's repositories
 audit-gh-tokens --no-remote     # local token files only
 audit-gh-tokens --json          # machine-readable report
-audit-gh-tokens --all-secrets   # every secret in your account and all your orgs
+audit-gh-tokens --all-secrets   # every secret in your account and the orgs you own
 ```
 
 **Repository secrets.** The audit lists every non-archived repository for the owner with
@@ -29,13 +29,33 @@ secret instead:
   (`gh secret list --env`);[^gh-secret-list]
 - for each organization, its organization-level secrets (`gh secret list --org`), and your
   own Codespaces user secrets (`gh secret list --user`);
-- without an owner argument, your account **and every organization you belong to**
-  (`GET /user/orgs`[^user-orgs]); with one, just that owner.
+- without an owner argument, your account **and every organization you own** (your role
+  is `admin`, shown as *Owner* on GitHub[^org-memberships]); with one, just that owner.
+
+Organizations where you are only a member are skipped and named in the report. Only
+organization owners can list organization secrets, and a member usually lacks the admin
+access to a repository that listing its secrets needs,[^secrets-api] so scanning them
+would mostly produce errors. To scan one anyway, pass it as the owner:
+`audit-gh-tokens that-org --all-secrets`.
+
+**Token scopes.** Two listings need scopes that `gh auth login` doesn't request by default:
+organization secrets need `admin:org`,[^org-secrets] and your Codespaces secrets need
+`codespace`.[^codespaces-secrets] Before scanning, the audit reads your `gh` token's scopes
+from the `X-OAuth-Scopes` header[^oauth-scopes] and skips any listing the token can't
+perform, instead of letting it fail. The report names what was skipped and how to include it:
+
+```text
+ℹ️  Not scanned — your gh token lacks these scopes: organization secrets (admin:org), Codespaces user secrets (codespace)
+   To include them: gh auth refresh -h github.com -s admin:org,codespace
+```
+
+`admin:org` grants full control of your organizations, not just read access to their secrets.
+Consider removing it after the audit with `gh auth refresh -h github.com -r admin:org`.
+Fine-grained tokens don't report scopes, so with one of those every listing is attempted.
 
 This makes several API calls per repository, so it is slower and uses more of your rate
-limit. Listings that fail (for example org secrets without org admin rights, or a token
-missing the `admin:org` or `codespace` scope) are reported as incomplete rather than silently
-dropped. A 404 (for example Codespaces not enabled for an organization, or a repository
+limit. A listing that still fails (for example a fine-grained token without the right
+permission) is reported as incomplete rather than silently dropped. A 404 (for example Codespaces not enabled for an organization, or a repository
 without environments) means there is nothing to list and is not reported.
 
 > [!NOTE]
@@ -63,7 +83,9 @@ Each token is marked `VALID`, `NEARING_EXPIRATION` (≤ 30 days), `EXPIRING_SOON
 
 [^gh-repo-list]: GitHub CLI manual, *gh repo list*: `[<owner>]`, `--no-archived`, `--limit`. <https://cli.github.com/manual/gh_repo_list>
 [^gh-secret-list]: GitHub CLI manual, *gh secret list*: JSON fields include `name` and `updatedAt`. <https://cli.github.com/manual/gh_secret_list>
-[^user-orgs]: GitHub Docs, *REST API endpoints for organizations*: "List organizations for the authenticated user". <https://docs.github.com/en/rest/orgs/orgs#list-organizations-for-the-authenticated-user>
+[^org-secrets]: GitHub Docs, *REST API endpoints for GitHub Actions secrets*, "List organization secrets": classic tokens and OAuth app tokens need the `admin:org` scope. <https://docs.github.com/en/rest/actions/secrets#list-organization-secrets>
+[^codespaces-secrets]: GitHub Docs, *REST API endpoints for Codespaces user secrets*, "List secrets for the authenticated user": classic tokens and OAuth app tokens need the `codespace` or `codespace:secrets` scope. <https://docs.github.com/en/rest/codespaces/secrets#list-secrets-for-the-authenticated-user>
+[^org-memberships]: GitHub Docs, *REST API endpoints for organization members*: "List organization memberships for the authenticated user" returns each membership's `role` (`admin` or `member`) and `state`. <https://docs.github.com/en/rest/orgs/members#list-organization-memberships-for-the-authenticated-user>
 [^secrets]: GitHub Docs, *Secrets reference*: naming rules (letters, numbers, underscores; no leading digit; no `GITHUB_` prefix; case-insensitive) and that values are not readable. <https://docs.github.com/en/actions/reference/security/secrets>
 [^secrets-api]: GitHub Docs, *REST API endpoints for GitHub Actions secrets*: required access and the `repo` scope. <https://docs.github.com/en/rest/actions/secrets>
 [^oauth-scopes]: GitHub Docs, *Scopes for OAuth apps*: scope names and the `X-OAuth-Scopes` response header. <https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps>

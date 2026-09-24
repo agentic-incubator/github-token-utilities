@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-09-24
+
+### Added
+
+- `audit-gh-tokens --all-secrets` checks your `gh` token's scopes before scanning and skips
+  the listings it can't perform instead of letting them fail: organization secrets without
+  `admin:org`, Codespaces user secrets without `codespace`. The report names what was skipped
+  and the `gh auth refresh` command that includes it (`remote.skippedScopes` and
+  `remote.tokenScopes` in JSON). Fine-grained tokens report no scopes, so every listing is
+  still attempted with them.
+
+### Changed
+
+- `audit-gh-tokens --all-secrets` without an owner now scans only the organizations you own
+  (role `admin`), not every organization you belong to. Member-only organizations are skipped
+  and listed (`remote.skippedOrgs` in JSON); pass one as the owner to scan it anyway. As a
+  member you can't list their organization secrets or, usually, their repositories' secrets,
+  so they only produced errors.
+
 ## [3.3.0] - 2026-09-24
 
 ### Added
@@ -184,6 +203,7 @@ All notable changes to this project are documented here. The format follows
 
 Initial release of `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `setup.mjs`.
 
+[3.4.0]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.2...v3.3.0
 [3.2.2]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.1...v3.2.2
 [3.2.1]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.0...v3.2.1

@@ -32,7 +32,9 @@ tokens (or asks why fewer secrets came back than expected), use `--all-secrets`.
 the name filter and lists, for each non-archived repo, its Actions, Agents, Dependabot and
 Codespaces secrets plus each deployment environment's secrets; for each org, the org-level
 secrets; and the user's Codespaces secrets. With no owner it scans the user's account **and
-every org they belong to** (the default mode scans one owner only). It makes several `gh`
+every org they own** (org role `admin`); orgs where they are only a member are skipped and
+listed in `remote.skippedOrgs` (to include one, pass it as the owner). The default mode
+scans one owner only. It makes several `gh`
 calls per repo, so warn that it is slower and uses more API rate limit.
 
 The built-in name pattern catches the usual GitHub token names. If the user's workflows use
@@ -47,9 +49,12 @@ user lacks admin rights can't have their secrets listed — they appear in `remo
 
 - `remote.findings[]`: `repo`, `secretName`, `updatedAt`, `ageDays`, `status`
   (`STALE` ≥ stale-days, `AGING` ≥ ⅔ of it, `FRESH`).
-- With `--all-secrets`, `remote` also has `mode: "all-secrets"`, `owners[]` and
-  `incomplete[]` (`target`, `error`: listings that failed, e.g. org secrets without admin
-  rights), and each finding adds `scope` (`repository`, `environment`, `organization`,
+- With `--all-secrets`, `remote` also has `mode: "all-secrets"`, `owners[]`, `skippedOrgs[]`,
+  `tokenScopes` (the gh token's classic scopes, or `null` for a fine-grained token),
+  `skippedScopes[]` (`listing`, `scope`: listings deliberately not attempted because the
+  token lacks the scope — `admin:org` for organization secrets, `codespace` for Codespaces
+  user secrets) and `incomplete[]` (`target`, `error`: listings that were attempted and
+  failed), and each finding adds `scope` (`repository`, `environment`, `organization`,
   `user`), `owner`, `environment`, `app` (`actions`, `agents`, `dependabot`, `codespaces`),
   `tokenLike` and, for org secrets, `visibility`. `repo` is `null` for org/user secrets.
 - `local[]`: `file`, `valid`, `login`, `scopes`, `expiresAt`, `status`, and for the secrets
@@ -73,7 +78,11 @@ Lead with what needs action, most urgent first, then a one-line all-clear for th
    token is safer; see `references/scopes.md`.
 
 For an `--all-secrets` run, group the table by owner/repo, call out `tokenLike` and `STALE`
-secrets first, and mention `noAccess`/`incomplete` so the user knows what wasn't seen. Only
+secrets first, and mention `skippedOrgs`, `skippedScopes`, `noAccess` and `incomplete` so the
+user knows what wasn't seen. For `skippedScopes`, offer
+`gh auth refresh -h github.com -s admin:org,codespace` (only the scopes listed), and point
+out that `admin:org` is full org control, removable afterwards with
+`gh auth refresh -h github.com -r admin:org`. Don't run it for them: it opens a browser. Only
 token-like repository Actions secrets can be rotated with `rotate`.
 
 Show a compact table rather than raw JSON. Never include token values — the report doesn't

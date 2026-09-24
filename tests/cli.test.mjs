@@ -72,11 +72,14 @@ if (cmd === 'api -i') {
   if ((process.env.GH_TOKEN || '').includes('REVOKED') || revoked.includes(process.env.GH_TOKEN)) { process.stderr.write('HTTP 401: Bad credentials'); process.exit(1); }
   const expiry = process.env.FAKE_GH_EXPIRY || '2099-01-01 00:00:00 UTC';
   const tokenLogin = process.env.FAKE_GH_TOKEN_LOGIN || 'octocat';
-  process.stdout.write('HTTP/2.0 200 OK\\r\\nX-Oauth-Scopes: repo\\r\\nGithub-Authentication-Token-Expiration: ' + expiry + '\\r\\n\\r\\n{"login":"' + tokenLogin + '"}');
+  // FAKE_GH_SCOPES overrides the scopes header; 'none' omits it, as for fine-grained tokens.
+  const scopes = process.env.FAKE_GH_SCOPES || 'repo';
+  const scopeHeader = scopes === 'none' ? '' : 'X-Oauth-Scopes: ' + scopes + '\\r\\n';
+  process.stdout.write('HTTP/2.0 200 OK\\r\\n' + scopeHeader + 'Github-Authentication-Token-Expiration: ' + expiry + '\\r\\n\\r\\n{"login":"' + tokenLogin + '"}');
 } else if (cmd === 'api user') {
   process.stdout.write((process.env.FAKE_GH_LOGIN || 'octocat') + '\\n');
-} else if (cmd === 'api user/orgs') {
-  process.stdout.write('acme\\n');
+} else if (cmd === 'api user/memberships/orgs') {
+  process.stdout.write('acme\\tadmin\\nwidgets\\tmember\\n');
 } else if (cmd === 'api users/acme') {
   process.stdout.write('Organization\\n');
 } else if (cmd === 'api repos/acme/api/environments') {
@@ -215,11 +218,16 @@ test('audit --json reports stale token secrets, inaccessible repos and local tok
   assert.ok(!result.stdout.includes(TOKEN));
 });
 
+const ALL_SCOPES = { FAKE_GH_SCOPES: 'repo, admin:org, codespace' };
+
 test('audit --all-secrets lists every secret kind across the user and their orgs', () => {
-  const result = run('audit.mjs', ['--json', '--all-secrets', '--no-local']);
+  const result = run('audit.mjs', ['--json', '--all-secrets', '--no-local'], { env: ALL_SCOPES });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
+  // Only orgs the user owns are scanned; member-only orgs are skipped and named.
   assert.deepEqual(report.remote.owners, ['octocat', 'acme']);
+  assert.deepEqual(report.remote.skippedOrgs, ['widgets']);
+  assert.ok(!ghCalls().some((c) => c.args.includes('widgets')));
   assert.equal(report.remote.scanned, 3);
   const rows = report.remote.findings.map((f) => [f.scope, f.repo ?? f.owner, f.environment, f.app, f.secretName, f.tokenLike]).sort();
   assert.deepEqual(rows, [
@@ -234,13 +242,41 @@ test('audit --all-secrets lists every secret kind across the user and their orgs
   assert.deepEqual(report.remote.noAccess, ['acme/locked']);
   // 403 is a gap; 404 (acme agents, octocat/dotfiles environments) means there is nothing to list.
   assert.deepEqual(report.remote.incomplete.map((i) => i.target), ['acme (codespaces)']);
+  assert.deepEqual(report.remote.skippedScopes, []);
   // Every non-archived repo of each owner, each app, and environment listings were requested.
   const apps = ghCalls().filter((c) => c.args[0] === 'secret' && c.args.includes('acme/api') && !c.args.includes('--env')).map((c) => c.args[c.args.indexOf('--app') + 1]);
   assert.deepEqual(apps.sort(), ['actions', 'agents', 'codespaces', 'dependabot']);
 });
 
+test('audit --all-secrets skips, and names, listings the gh token lacks the scopes for', () => {
+  const result = run('audit.mjs', ['--json', '--all-secrets', '--no-local']);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.remote.skippedScopes, [
+    { listing: 'organization secrets', scope: 'admin:org' },
+    { listing: 'Codespaces user secrets', scope: 'codespace' },
+  ]);
+  // Not attempted, so nothing failed: no org or user secret calls, and no 403s reported.
+  assert.ok(!ghCalls().some((c) => c.args[0] === 'secret' && (c.args.includes('--org') || c.args.includes('--user'))));
+  assert.deepEqual(report.remote.incomplete, []);
+  assert.ok(report.remote.findings.every((f) => f.scope === 'repository' || f.scope === 'environment'));
+  const text = run('audit.mjs', ['--all-secrets', '--no-local']);
+  assert.match(text.stdout, /Not scanned — your gh token lacks these scopes: organization secrets \(admin:org\), Codespaces user secrets \(codespace\)/);
+  assert.match(text.stdout, /gh auth refresh -h github\.com -s admin:org,codespace/);
+});
+
+test('audit --all-secrets attempts every listing when the token reports no scopes (fine-grained)', () => {
+  const result = run('audit.mjs', ['--json', '--all-secrets', '--no-local'], { env: { FAKE_GH_SCOPES: 'none' } });
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.remote.tokenScopes, null);
+  assert.deepEqual(report.remote.skippedScopes, []);
+  assert.ok(report.remote.findings.some((f) => f.scope === 'organization'));
+  assert.ok(report.remote.findings.some((f) => f.scope === 'user'));
+});
+
 test('audit --all-secrets with an owner scans only that owner, and rejects --no-remote', () => {
-  const result = run('audit.mjs', ['acme', '--json', '--all-secrets', '--no-local']);
+  const result = run('audit.mjs', ['acme', '--json', '--all-secrets', '--no-local'], { env: ALL_SCOPES });
   assert.equal(result.status, 0, result.stderr);
   const report = JSON.parse(result.stdout);
   assert.deepEqual(report.remote.owners, ['acme']);
@@ -250,11 +286,14 @@ test('audit --all-secrets with an owner scans only that owner, and rejects --no-
 });
 
 test('audit --all-secrets prints a table without secret values', () => {
-  const result = run('audit.mjs', ['--all-secrets', '--no-local']);
+  const result = run('audit.mjs', ['--all-secrets', '--no-local'], { env: ALL_SCOPES });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /ALL REPOSITORY, ORGANIZATION AND USER SECRETS/);
   assert.match(result.stdout, /env:prod/);
   assert.match(result.stdout, /org\/actions/);
+  assert.match(result.stdout, /Skipped 1 org\(s\) where you're a member, not an owner: widgets/);
+  // Columns are sized to the data: every value is followed by at least two spaces.
+  assert.match(result.stdout, /REGISTRY_PASSWORD {2,}dependabot {2,}/);
 });
 
 test('setup --dry-run copies nothing and edits no shell config', () => {

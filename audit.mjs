@@ -12,6 +12,7 @@ import {
   detectEnvFormat,
   expiryStatus,
   isTokenSecret,
+  parseHeaders,
   readEnvAssignment,
   verifyToken,
 } from './gh-token-lib.mjs';
@@ -20,6 +21,15 @@ const SECRETS_FILE_KEYS = ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN', 'GH_T
 
 // Every application `gh secret list --app` accepts, at repository and organization level.
 const SECRET_APPS = ['actions', 'agents', 'dependabot', 'codespaces'];
+
+// Classic/OAuth token scopes some --all-secrets listings need. Organization secrets need
+// admin:org for every app; Codespaces user secrets need codespace or codespace:secrets.
+//   https://docs.github.com/en/rest/actions/secrets#list-organization-secrets
+//   https://docs.github.com/en/rest/codespaces/secrets#list-secrets-for-the-authenticated-user
+const SCOPED_LISTINGS = {
+  org: { listing: 'organization secrets', scope: 'admin:org', accepts: ['admin:org'] },
+  user: { listing: 'Codespaces user secrets', scope: 'codespace', accepts: ['codespace', 'codespace:secrets'] },
+};
 
 const execFileAsync = promisify(execFile);
 
@@ -41,7 +51,11 @@ Options:
   --all-secrets          List every secret, not just token-like names: Actions, Agents,
                          Dependabot and Codespaces secrets of each repo, its environments'
                          secrets, org-level secrets, and your Codespaces user secrets.
-                         Without an owner, scans your account and every org you belong to
+                         Without an owner, scans your account and the orgs you own
+                         (orgs where you're only a member are skipped and named).
+                         Listings your gh token lacks the scope for (org secrets:
+                         admin:org; Codespaces user secrets: codespace) are skipped
+                         and named instead of failing
   --no-local             Skip checking local ~/*.ght files and the secrets file
   --secrets-file <path>  Shell secrets file to check (default: ~/.secrets.env,
                          ~/.secrets.ps1 on Windows PowerShell; see store-gh-token)
@@ -91,6 +105,20 @@ function getCurrentUser() {
     encoding: 'utf-8',
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
+}
+
+// The scopes of the token gh itself uses, from the X-OAuth-Scopes header, or null when GitHub
+// doesn't send one (fine-grained tokens), in which case nothing can be known in advance.
+function getGhTokenScopes() {
+  try {
+    const call = gh(['api', '-i', 'user']);
+    const raw = execFileSync(call.cmd, call.args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const headers = parseHeaders(raw.split(/\r?\n\r?\n/)[0]);
+    if (!('x-oauth-scopes' in headers)) return null;
+    return headers['x-oauth-scopes'].split(',').map((s) => s.trim()).filter(Boolean);
+  } catch {
+    return null;
+  }
 }
 
 function getRepositories(owner, limit) {
@@ -168,19 +196,38 @@ function firstLine(error) {
 
 // --all-secrets: every secret, at every level GitHub keeps them, for each owner.
 async function auditAllSecrets(opts, user, log) {
+  // Without an owner: the user plus the orgs they own (role "admin"). In orgs where they are
+  // only a member they can't list org secrets or, usually, repo secrets, so those are skipped
+  // and named; pass the org as the owner to scan it anyway.
   let owners;
+  let skippedOrgs = [];
   if (opts.owner) {
     owners = [opts.owner];
   } else {
-    let orgs = [];
+    let memberships = [];
     try {
-      orgs = ghLines(['api', 'user/orgs', '--paginate', '--jq', '.[].login']);
+      memberships = ghLines(['api', 'user/memberships/orgs', '--paginate', '--jq', '.[] | select(.state == "active") | "\\(.organization.login)\\t\\(.role)"'])
+        .map((line) => line.split('\t'));
     } catch (error) {
       log(`⚠️  Could not list your organizations (${firstLine(error)}); scanning ${user} only\n`);
     }
-    owners = [user, ...orgs.filter((o) => o !== user)];
+    const owned = memberships.filter(([, role]) => role === 'admin').map(([org]) => org);
+    skippedOrgs = memberships.filter(([, role]) => role !== 'admin').map(([org]) => org).sort();
+    owners = [user, ...owned.filter((o) => o !== user)];
   }
   log(`🏢 Owners: ${owners.join(', ')}\n`);
+
+  // Skip, rather than attempt and fail, the listings the token is known not to allow.
+  const tokenScopes = getGhTokenScopes();
+  const allowed = (need) => tokenScopes === null || need.accepts.some((s) => tokenScopes.includes(s));
+  const scanOrgSecrets = allowed(SCOPED_LISTINGS.org);
+  const scanUserSecrets = allowed(SCOPED_LISTINGS.user);
+  const skippedScopes = [
+    ...(scanOrgSecrets ? [] : [SCOPED_LISTINGS.org]),
+    ...(scanUserSecrets ? [] : [SCOPED_LISTINGS.user]),
+  ].map(({ listing, scope }) => ({ listing, scope }));
+  if (skippedScopes.length > 0) log(`ℹ️  Not scanning ${skippedScopes.map((s) => s.listing).join(' or ')}: your gh token lacks ${skippedScopes.map((s) => s.scope).join(', ')}\n`);
+  if (skippedOrgs.length > 0) log(`ℹ️  Skipping ${skippedOrgs.length} org(s) where you're a member, not an owner: ${skippedOrgs.join(', ')}\n`);
 
   const findings = [];
   const noAccess = [];
@@ -212,12 +259,12 @@ async function auditAllSecrets(opts, user, log) {
   const repositories = [];
   for (const owner of owners) {
     const isOrg = owner !== user && (opts.owner ? ownerIsOrg(owner) : true);
-    if (isOrg) {
+    if (isOrg && scanOrgSecrets) {
       for (const app of SECRET_APPS) {
         await attempt(`${owner} (${app})`, ['secret', 'list', '--org', owner, '--app', app, '--json', 'name,updatedAt,visibility'],
           { scope: 'organization', owner, repo: null, environment: null, app });
       }
-    } else if (owner === user) {
+    } else if (owner === user && scanUserSecrets) {
       await attempt(`${owner} (codespaces user secrets)`, ['secret', 'list', '--user', '--json', 'name,updatedAt'],
         { scope: 'user', owner, repo: null, environment: null, app: 'codespaces' });
     }
@@ -258,7 +305,7 @@ async function auditAllSecrets(opts, user, log) {
 
   findings.sort((a, b) => b.ageDays - a.ageDays);
   incomplete.sort((a, b) => a.target.localeCompare(b.target));
-  return { mode: 'all-secrets', owners, scanned: repositories.length, findings, noAccess: noAccess.sort(), incomplete };
+  return { mode: 'all-secrets', owners, skippedOrgs, tokenScopes, skippedScopes, scanned: repositories.length, findings, noAccess: noAccess.sort(), incomplete };
 }
 
 function ownerIsOrg(owner) {
@@ -352,16 +399,28 @@ function printAllSecrets(remote, staleDays) {
   if (remote.findings.length === 0) {
     console.log('✅ No secrets found\n');
   } else {
-    console.log('  ' + 'LOCATION'.padEnd(40) + 'SECRET NAME'.padEnd(30) + 'KIND'.padEnd(18) + 'STATUS'.padEnd(8) + 'LAST SET');
-    console.log('─'.repeat(110));
+    // Size each column to its longest value so long repo and secret names never run together.
+    const secretLabel = (f) => `${f.secretName}${f.tokenLike ? ' 🔑' : ''}`;
+    const width = (header, values) => Math.max(header.length, ...values.map((v) => v.length)) + 2;
+    const locationWidth = width('LOCATION', remote.findings.map(secretLocation));
+    const nameWidth = width('SECRET NAME', remote.findings.map(secretLabel));
+    const kindWidth = width('KIND', remote.findings.map(secretKind));
+    console.log('  ' + 'LOCATION'.padEnd(locationWidth) + 'SECRET NAME'.padEnd(nameWidth) + 'KIND'.padEnd(kindWidth) + 'STATUS'.padEnd(8) + 'LAST SET');
+    console.log('─'.repeat(2 + locationWidth + nameWidth + kindWidth + 8 + 22));
     for (const f of remote.findings) {
-      const name = `${f.secretName}${f.tokenLike ? ' 🔑' : ''}`;
-      console.log(`${f.icon} ${secretLocation(f).padEnd(40)}${name.padEnd(30)}${secretKind(f).padEnd(18)}${f.status.padEnd(8)}${f.updatedAt.slice(0, 10)} (${f.ageDays}d ago)`);
+      console.log(`${f.icon} ${secretLocation(f).padEnd(locationWidth)}${secretLabel(f).padEnd(nameWidth)}${secretKind(f).padEnd(kindWidth)}${f.status.padEnd(8)}${f.updatedAt.slice(0, 10)} (${f.ageDays}d ago)`);
     }
     console.log('');
   }
   const repos = new Set(remote.findings.map((f) => f.repo).filter(Boolean)).size;
   console.log(`📊 ${remote.findings.length} secret(s) in ${repos} of ${remote.scanned} repositories across ${remote.owners.length} owner(s); 🔑 marks GitHub-token-like names\n`);
+  if (remote.skippedScopes.length > 0) {
+    console.log(`ℹ️  Not scanned — your gh token lacks these scopes: ${remote.skippedScopes.map((s) => `${s.listing} (${s.scope})`).join(', ')}`);
+    console.log(`   To include them: gh auth refresh -h github.com -s ${remote.skippedScopes.map((s) => s.scope).join(',')}\n`);
+  }
+  if (remote.skippedOrgs.length > 0) {
+    console.log(`ℹ️  Skipped ${remote.skippedOrgs.length} org(s) where you're a member, not an owner: ${remote.skippedOrgs.join(', ')} — name one as the owner to scan it anyway\n`);
+  }
   if (remote.noAccess.length > 0) {
     console.log(`⚠️  Could not read secrets in ${remote.noAccess.length} repo(s) (needs admin access): ${remote.noAccess.slice(0, 10).join(', ')}${remote.noAccess.length > 10 ? ', …' : ''}\n`);
   }
@@ -371,7 +430,7 @@ function printAllSecrets(remote, staleDays) {
   const stale = remote.findings.filter((f) => f.status === 'STALE');
   if (stale.length > 0) {
     const rotatable = stale.filter((f) => f.tokenLike && f.scope === 'repository' && f.app === 'actions').length;
-    console.log(`🔴 ${stale.length} secret(s) not set in ${staleDays}+ days${rotatable ? ` — ${rotatable} are token-like repository secrets; rotate with: rotate-gh-token <owner/repo> <SECRET>` : ''}\n`);
+    console.log(`🔴 ${stale.length} secret(s) not set in ${staleDays}+ days${rotatable ? ` — ${rotatable} of them token-like repository secret(s); rotate with: rotate-gh-token <owner/repo> <SECRET>` : ''}\n`);
   }
   console.log('ℹ️  GitHub never reveals secret values; "LAST SET" is the only age signal available.\n');
 }
