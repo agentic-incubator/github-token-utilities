@@ -1,5 +1,7 @@
 # Evidence
 
+[README](../README.md) › [Documentation](../README.md#documentation) › Reference › Evidence
+
 Every external behavior this toolkit depends on, where it is implemented, and the public
 source that backs it. Verified on **2026-09-24**.
 
@@ -64,9 +66,9 @@ source that backs it. Verified on **2026-09-24**.
 
 | # | Behavior relied on | Implemented in | Status | Evidence |
 |---|---|---|---|---|
-| R1 | `npm pack` builds a tarball from package.json `files`, and `npm install -g <tarball URL>` installs its `bin` commands without a registry | `scripts/package-release.mjs`, README "From a release" | Documented, Tested here | [npm pack](https://docs.npmjs.com/cli/commands/npm-pack); [npm install](https://docs.npmjs.com/cli/commands/npm-install); the tarball was installed with `--prefix` into a temporary folder, and all four commands ran |
+| R1 | `npm pack` builds a tarball from package.json `files`, and `npm install -g <tarball URL>` installs its `bin` commands without a registry | `scripts/package-release.mjs`, [Installation → From a release](INSTALLATION.md#from-a-release) | Documented, Tested here | [npm pack](https://docs.npmjs.com/cli/commands/npm-pack); [npm install](https://docs.npmjs.com/cli/commands/npm-install); the tarball was installed with `--prefix` into a temporary folder, and all four commands ran |
 | R2 | `gh release create TAG FILES --notes-file --verify-tag [--prerelease]` | `release.yml` | Documented | [gh release create](https://cli.github.com/manual/gh_release_create) |
-| R3 | `actions/attest-build-provenance` signs SLSA provenance (needs `id-token: write` and `attestations: write`); `gh attestation verify` checks it | `release.yml`; README verify step | Documented | [Artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds); [gh attestation verify](https://cli.github.com/manual/gh_attestation_verify) |
+| R3 | `actions/attest-build-provenance` signs SLSA provenance (needs `id-token: write` and `attestations: write`); `gh attestation verify` checks it | `release.yml`; [Installation → From a release](INSTALLATION.md#from-a-release) (verify step) | Documented | [Artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds); [gh attestation verify](https://cli.github.com/manual/gh_attestation_verify) |
 | R4 | A workflow with `on: workflow_call` can be reused as a job (`uses: ./.github/workflows/ci.yml`) | `release.yml` → `ci.yml` | Documented | [Reusing workflows](https://docs.github.com/en/actions/sharing-automations/reusing-workflows) |
 
 ## Agent Skills format and hosts

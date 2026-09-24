@@ -19,9 +19,9 @@ test('changelogSection returns only the requested version, without link definiti
   assert.equal(changelogSection(changelog, '9.9.9'), null);
 });
 
-test('the current version has release notes in CHANGELOG.md', () => {
-  const notes = changelogSection(fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf-8'), pkg.version);
-  assert.ok(notes && notes.length > 20, `CHANGELOG.md needs a "## [${pkg.version}]" section`);
+test('the current version has release notes in docs/CHANGELOG.md', () => {
+  const notes = changelogSection(fs.readFileSync(path.join(ROOT, 'docs', 'CHANGELOG.md'), 'utf-8'), pkg.version);
+  assert.ok(notes && notes.length > 20, `docs/CHANGELOG.md needs a "## [${pkg.version}]" section`);
 });
 
 test('package-release refuses a tag that does not match package.json', () => {

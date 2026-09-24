@@ -1,5 +1,7 @@
 # Project Structure
 
+[README](../README.md) › [Documentation](../README.md#documentation) › Project › Project structure
+
 ```
 github-token-utilities/
 ├── generator.mjs            # gen-gh-token: create, verify and save a PAT
@@ -13,7 +15,7 @@ github-token-utilities/
 │   ├── hosts.json           # skill metadata + per-host differences (paths, tool names)
 │   ├── core/                # the single source of the skill, edit here
 │   │   ├── SKILL.md.tmpl
-│   │   └── references/      # setup, audit, rotate, generate, terminal, scopes, troubleshooting
+│   │   │   └── references/      # setup, audit, rotate, generate, terminal, revoke, scopes, troubleshooting
 │   └── dist/<host>/github-token-utilities/   # generated variants, do not edit
 ├── scripts/
 │   ├── build-skills.mjs     # render core → dist and validate against the spec
@@ -24,16 +26,18 @@ github-token-utilities/
 │   ├── cli.test.mjs         # end-to-end tests against a fake gh
 │   ├── skills.test.mjs      # skill rendering and portability tests
 │   ├── shells.test.mjs      # generated files loaded in real bash/zsh/sh/dash/ksh/fish/csh/tcsh/pwsh
-│   └── release.test.mjs     # release notes extraction and tag/version guard
-├── docs/
-│   └── EVIDENCE.md          # every external behavior relied on, with sources
+│   ├── release.test.mjs     # release notes extraction and tag/version guard
+│   └── docs.test.mjs        # every Markdown link, anchor and footnote resolves; naming convention
+├── docs/                    # all documentation except README.md (UPPERCASE names)
+│   ├── QUICKSTART.md, INSTALLATION.md
+│   ├── GENERATE.md, AUDIT.md, ROTATE.md, STORE.md, REVOKE.md, AGENT-SKILLS.md
+│   ├── COMPATIBILITY.md, SECURITY-MODEL.md, TROUBLESHOOTING.md, EVIDENCE.md
+│   └── DEVELOPMENT.md, PROJECT-STRUCTURE.md, CHANGELOG.md
 ├── .github/
 │   ├── workflows/ci.yml     # tests on Ubuntu/macOS/Windows × Node 22/24; skill validation
 │   ├── workflows/release.yml # on v* tags: CI, build assets, attest, publish GitHub Release
 │   └── dependabot.yml       # weekly GitHub Actions + npm updates
-├── README.md
-├── QUICKSTART.md
-├── CHANGELOG.md
+├── README.md                # entry point; links to everything in docs/
 ├── LICENSE
 └── package.json
 ```

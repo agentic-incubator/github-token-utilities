@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 24
 
-      # Fails unless the tag equals v<package.json version> and CHANGELOG.md has that section.
+      # Fails unless the tag equals v<package.json version> and docs/CHANGELOG.md has that section.
       - name: Build release assets
         run: node scripts/package-release.mjs --check-tag "$GITHUB_REF_NAME"
 

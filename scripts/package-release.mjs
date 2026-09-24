@@ -5,7 +5,7 @@
 //   github-token-utilities-<v>.zip            the same files as a plain zip
 //   github-token-utilities-skill-<host>-<v>.zip  one per agent host; unzip into its skills folder
 //   SHA256SUMS                                checksums for every asset
-//   RELEASE_NOTES.md                          this version's CHANGELOG section (not an asset)
+//   RELEASE_NOTES.md                          this version's docs/CHANGELOG.md section (not an asset)
 //
 //   node scripts/package-release.mjs                   build
 //   node scripts/package-release.mjs --check-tag v1.2.3  also fail unless the tag matches package.json
@@ -53,9 +53,9 @@ function main() {
     }
   }
 
-  const notes = changelogSection(fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf-8'), pkg.version);
+  const notes = changelogSection(fs.readFileSync(path.join(ROOT, 'docs', 'CHANGELOG.md'), 'utf-8'), pkg.version);
   if (!notes) {
-    console.error(`❌ CHANGELOG.md has no "## [${pkg.version}]" section.`);
+    console.error(`❌ docs/CHANGELOG.md has no "## [${pkg.version}]" section.`);
     process.exit(1);
   }
 

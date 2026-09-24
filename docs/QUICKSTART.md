@@ -1,7 +1,9 @@
 # Quick Start
 
-About five minutes from nothing to your first audit. See the [README](README.md) for the full
-reference and [docs/EVIDENCE.md](docs/EVIDENCE.md) for the sources behind each behavior.
+[README](../README.md) › [Documentation](../README.md#documentation) › Quick start
+
+About five minutes from nothing to your first audit. Each step links to its full guide, and
+[Evidence](EVIDENCE.md) lists the sources behind each behavior.
 
 ## 1. Prerequisites
 
@@ -21,6 +23,8 @@ reference and [docs/EVIDENCE.md](docs/EVIDENCE.md) for the sources behind each b
 
 ## 2. Install
 
+Full guide: [Installation](INSTALLATION.md), including installing from a release with `npm install -g`.
+
 ```bash
 git clone https://github.com/agentic-incubator/github-token-utilities.git ~/.local/share/github-token-utilities
 node ~/.local/share/github-token-utilities/setup.mjs --dry-run   # preview
@@ -31,10 +35,12 @@ Open a new terminal so the aliases load. On Windows, run the same commands in Po
 using `"$env:LOCALAPPDATA\github-token-utilities"` as the folder.
 
 > [!TIP]
-> Prefer an AI agent to do this with you? Install the skill for your agent (step 6), then ask
+> Prefer an AI agent to do this with you? Install the skill for your agent (step 8), then ask
 > it to "set up the GitHub token utilities".
 
 ## 3. Audit what you have
+
+Full guide: [Audit tokens](AUDIT.md).
 
 ```bash
 audit-gh-tokens
@@ -48,6 +54,8 @@ You get two tables:
 Nothing is changed.
 
 ## 4. Generate a token
+
+Full guide: [Generate a token](GENERATE.md).
 
 ```bash
 gen-gh-token --type fine-grained --name my-first-token --permissions contents=read --expiration 30
@@ -65,6 +73,8 @@ The token is checked with GitHub and saved to `~/my-first-token.ght` (readable o
 
 ## 5. Rotate a repository secret
 
+Full guide: [Rotate a repository secret](ROTATE.md).
+
 ```bash
 rotate-gh-token OWNER/REPO GH_TOKEN --dry-run                 # see what would change
 rotate-gh-token OWNER/REPO GH_TOKEN --existing my-first-token # replace the secret
@@ -74,6 +84,8 @@ rotate-gh-token OWNER/REPO GH_TOKEN --existing my-first-token # replace the secr
 > Rotating does not revoke the old token. Delete it on GitHub once the new one works.
 
 ## 6. Keep a short-lived token in your terminal (optional)
+
+Full guide: [Store a terminal token](STORE.md).
 
 ```bash
 store-gh-token --generate --expiration 7 --ensure-loaded
@@ -90,6 +102,8 @@ To also revoke the token being replaced, add `--revoke-previous`.
 
 ## 7. Revoke a token you no longer need (optional)
 
+Full guide: [Revoke a token](REVOKE.md).
+
 ```bash
 revoke-gh-token --from my-first-token --dry-run   # see which account and scopes it has
 revoke-gh-token --from my-first-token             # type the account name to confirm
@@ -100,6 +114,8 @@ revoke-gh-token --from my-first-token             # type the account name to con
 > on GitHub's settings page instead.
 
 ## 8. Add the AI agent skill (optional)
+
+Full guide: [AI agent skills](AGENT-SKILLS.md).
 
 From the clone:
 
@@ -114,5 +130,6 @@ acme/api"*.
 ## Next steps
 
 - `gen-gh-token --help`, `audit-gh-tokens --help`, `rotate-gh-token --help`, `store-gh-token --help`, `revoke-gh-token --help`
-- [README → Choosing permissions and scopes](README.md#generate-a-token)
-- [README → Troubleshooting](README.md#troubleshooting)
+- [Generate a token → choosing permissions and scopes](GENERATE.md)
+- [Store a terminal token](STORE.md) and [Revoke a token](REVOKE.md)
+- [Troubleshooting](TROUBLESHOOTING.md)

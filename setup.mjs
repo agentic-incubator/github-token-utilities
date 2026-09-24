@@ -300,7 +300,7 @@ async function main() {
     console.log('3. Run: gen-gh-token\n');
   }
 
-  console.log('📖 Documentation: See README.md for detailed usage\n');
+  console.log('📖 Documentation: https://github.com/agentic-incubator/github-token-utilities#documentation\n');
 
 }
 
