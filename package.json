@@ -1,6 +1,6 @@
 {
   "name": "github-token-utilities",
-  "version": "3.2.1",
+  "version": "3.2.2",
   "description": "CLI tools and cross-agent skills for managing GitHub personal access tokens: generate, audit, and rotate",
   "type": "module",
   "bin": {
