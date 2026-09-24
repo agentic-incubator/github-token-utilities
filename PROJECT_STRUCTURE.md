@@ -6,6 +6,7 @@ github-token-utilities/
 ├── audit.mjs                # audit-gh-tokens: token-like repo secrets + local token health
 ├── rotate.mjs               # rotate-gh-token: replace a repo Actions secret
 ├── store.mjs                # store-gh-token: write a token into the shell secrets file
+├── revoke.mjs               # revoke-gh-token: revoke a token and remove local copies
 ├── gh-token-lib.mjs         # shared helpers used by all the commands
 ├── setup.mjs                # copies the scripts to ~ and adds shell aliases
 ├── skills/
@@ -45,8 +46,9 @@ github-token-utilities/
 | `audit.mjs` | Scans repositories with `gh repo list` and `gh secret list`; checks each `~/*.ght` against `GET /user` | `--json` output is what the agent skill reads |
 | `rotate.mjs` | Validates input, previews with `--dry-run`, generates a token (or uses `--existing`), then pipes it to `gh secret set` on stdin | Never places the token on a command line |
 | `store.mjs` | Adds or replaces `GITHUB_TOKEN` and a `GITHUB_PERSONAL_ACCESS_TOKEN` reference in the shell secrets file (sh, fish, csh, or PowerShell syntax), refuses long-lived tokens, backs up, and restricts to the owner | `--dry-run` previews; `--ensure-loaded` wires the file into your shell startup |
+| `revoke.mjs` | Resolves a token from `~/<name>.ght`, the secrets file, its `.bak`, or stdin; verifies it; guards against revoking `gh`'s own login; calls `POST /credentials/revoke` unauthenticated; polls until GitHub rejects the token; removes local copies | `--dry-run` previews; `--web` opens GitHub instead; requires typing the account name unless `--yes` |
 | `gh-token-lib.mjs` | Validation, URL builders, header parsing, `verifyToken`, secrets-file editing, platform helpers, and the `gh()` call wrapper | Pure functions are unit-tested; `setup.mjs` copies it next to the scripts |
-| `setup.mjs` | Copies the five runtime files to `~` and adds aliases in the syntax and startup file of your shell | `--dry-run` previews; safe to re-run |
+| `setup.mjs` | Copies the six runtime files to `~` and adds aliases in the syntax and startup file of your shell | `--dry-run` previews; safe to re-run |
 
 > [!NOTE]
 > After `setup.mjs`, the scripts live in your home directory (`~/generator.mjs` and so on).
@@ -70,8 +72,11 @@ skills/hosts.json ─────────┘          │
 ## Testing hook
 
 > [!NOTE]
-> `GTU_GH_SHIM` (a path to a Node script) replaces the real `gh` for every call. It exists so
-> the test suite can use one fake `gh` on every OS; don't set it in normal use.
+> Two environment variables exist only for the test suite; don't set them in normal use:
+> - `GTU_GH_SHIM`, a path to a Node script, replaces the real `gh` for every call, so one fake
+>   `gh` works on every OS.
+> - `GTU_API_URL` replaces `https://api.github.com` for the unauthenticated revocation call,
+>   so tests hit a local fake instead of revoking real tokens.
 
 ## Local state that is never committed
 

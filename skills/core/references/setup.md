@@ -1,8 +1,8 @@
 # Setup, update, uninstall
 
-The toolkit lives in a git clone. `setup.mjs` then copies the three scripts to the home
-directory and adds shell aliases (`gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token`) for the
-user's own terminal. You always call the scripts by path (`node ~/audit.mjs`), because the
+The toolkit lives in a git clone. `setup.mjs` then copies the scripts to the home directory
+and adds shell aliases (`gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token`,
+`store-gh-token`, `revoke-gh-token`) for the user's own terminal. You always call the scripts by path (`node ~/audit.mjs`), because the
 shells you run commands in usually don't load the user's shell config, so aliases won't exist.
 
 Clone location (use it unless the user prefers another):
@@ -14,9 +14,10 @@ Clone location (use it unless the user prefers another):
 
 1. **Explain and confirm.** Tell the user exactly what will happen, then ask to proceed:
    - clone `{{REPO_URL}}` into the location above
-   - copy `generator.mjs`, `audit.mjs`, `rotate.mjs`, `store.mjs` and `gh-token-lib.mjs` into
+   - copy `generator.mjs`, `audit.mjs`, `rotate.mjs`, `store.mjs`, `revoke.mjs` and `gh-token-lib.mjs` into
      their home directory (overwriting older copies of those files)
-   - add four aliases (`gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token`, `store-gh-token`)
+   - add five aliases (`gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token`, `store-gh-token`,
+     `revoke-gh-token`)
      to the startup file for their shell: `~/.zshrc`; `~/.bash_profile` (macOS) or `~/.bashrc`
      (Linux) for bash; `~/.config/fish/conf.d/github-token-utilities.fish`; `~/.tcshrc` or
      `~/.cshrc`; `~/.kshrc`/`~/.profile`; or the PowerShell profile on Windows. Existing aliases
@@ -57,15 +58,15 @@ Clone location (use it unless the user prefers another):
 ## Update
 
 Same as install: step 2 (`git pull --ff-only`), then steps 3–5. Re-running setup is safe:
-it refreshes the three scripts and skips aliases that already exist. If `git pull` reports
+it refreshes the scripts and skips aliases that already exist. If `git pull` reports
 local changes or a non-fast-forward, stop and show the user rather than forcing anything.
 
 ## Uninstall
 
 Confirm first, and list exactly what will be removed:
 
-- `~/generator.mjs`, `~/audit.mjs`, `~/rotate.mjs`, `~/store.mjs`, `~/gh-token-lib.mjs`
-- the four alias lines in the shell config (show the lines; edit the file only after they agree)
+- `~/generator.mjs`, `~/audit.mjs`, `~/rotate.mjs`, `~/store.mjs`, `~/revoke.mjs`, `~/gh-token-lib.mjs`
+- the five alias lines in the shell config (show the lines; edit the file only after they agree)
 - the clone folder
 
 **Never delete `~/*.ght` token files or the shell secrets file as part of uninstall.** They are the user's credentials;

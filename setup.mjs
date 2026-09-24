@@ -8,17 +8,18 @@ import { getPowerShellProfile } from './gh-token-lib.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 // gh-token-lib.mjs is shared by the other three and must sit next to them.
-const SCRIPTS = ['generator.mjs', 'audit.mjs', 'rotate.mjs', 'store.mjs', 'gh-token-lib.mjs'];
+const SCRIPTS = ['generator.mjs', 'audit.mjs', 'rotate.mjs', 'store.mjs', 'revoke.mjs', 'gh-token-lib.mjs'];
 const DRY_RUN = process.argv.includes('--dry-run');
 
 if (process.argv.includes('-h') || process.argv.includes('--help')) {
   console.log(`
 Usage: node setup.mjs [--dry-run]
 
-Copies generator.mjs, audit.mjs, rotate.mjs, store.mjs and gh-token-lib.mjs to
-your home directory and adds the gen-gh-token, audit-gh-tokens, rotate-gh-token
-and store-gh-token aliases to your shell config (your PowerShell profile on
-Windows). Re-running is safe: existing aliases are left alone.
+Copies generator.mjs, audit.mjs, rotate.mjs, store.mjs, revoke.mjs and
+gh-token-lib.mjs to your home directory and adds the gen-gh-token,
+audit-gh-tokens, rotate-gh-token, store-gh-token and revoke-gh-token aliases to
+your shell config (your PowerShell profile on Windows). Re-running is safe:
+existing aliases are left alone.
 
   --dry-run   Show what would be copied and which file would change; change nothing
 `);
@@ -55,6 +56,7 @@ function getShellConfigFiles() {
         { name: 'audit-gh-tokens', command: 'function audit-gh-tokens { node $HOME/audit.mjs @args }' },
         { name: 'rotate-gh-token', command: 'function rotate-gh-token { node $HOME/rotate.mjs @args }' },
         { name: 'store-gh-token', command: 'function store-gh-token { node $HOME/store.mjs @args }' },
+        { name: 'revoke-gh-token', command: 'function revoke-gh-token { node $HOME/revoke.mjs @args }' },
       ],
     };
   }
@@ -66,6 +68,7 @@ function getShellConfigFiles() {
     ['audit-gh-tokens', 'audit.mjs'],
     ['rotate-gh-token', 'rotate.mjs'],
     ['store-gh-token', 'store.mjs'],
+    ['revoke-gh-token', 'revoke.mjs'],
   ];
 
   if (shell === 'fish') {
@@ -276,7 +279,8 @@ async function main() {
   console.log('  gen-gh-token       Generate a new GitHub token');
   console.log('  audit-gh-tokens    Audit repositories for token secrets');
   console.log('  rotate-gh-token    Rotate a token in a repository secret');
-  console.log('  store-gh-token     Store a token in your shell secrets file\n');
+  console.log('  store-gh-token     Store a token in your shell secrets file');
+  console.log('  revoke-gh-token    Permanently revoke a token and remove local copies\n');
 
   console.log('🔧 Next Steps:\n');
 

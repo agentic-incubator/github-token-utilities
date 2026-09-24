@@ -51,6 +51,7 @@ terminal, because it waits for them to press Enter and reads their clipboard:
 ```bash
 node ~/store.mjs --generate --expiration 7
 # add --ensure-loaded if their shell doesn't load the secrets file yet
+# add --revoke-previous to revoke the replaced token right after (irreversible; see references/revoke.md)
 # narrower: --scopes repo,workflow,read:org,write:packages
 ```
 
@@ -70,6 +71,9 @@ What they'll see:
    than `--max-days` (30).
 6. `GITHUB_TOKEN` is added or replaced, and `GITHUB_PERSONAL_ACCESS_TOKEN` is pointed at
    it. The old file is backed up, and they're told if the replaced token is still active.
+   With `--revoke-previous`, that token is revoked straight away and the backup that held it
+   is deleted. Without it, offer `node ~/revoke.mjs --previous` afterwards
+   (`references/revoke.md`).
 
 The two-step alternative still works: `node ~/generator.mjs --type classic --name terminal
 --scopes default --expiration 7 --yes`, then `node ~/store.mjs --from terminal --yes`. Use it

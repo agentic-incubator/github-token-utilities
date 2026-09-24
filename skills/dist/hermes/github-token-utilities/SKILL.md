@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Node.js 22+, git, and the GitHub CLI (gh) authenticated to github.com. Works on macOS, Linux and Windows; bash, zsh, sh, ksh, dash, fish, csh/tcsh and PowerShell."
 metadata:
   author: "agentic-incubator"
-  version: "3.1.0"
+  version: "3.2.0"
   repository: "https://github.com/agentic-incubator/github-token-utilities"
   short-description: "Audit, rotate and generate GitHub tokens"
   hermes:
@@ -18,7 +18,7 @@ metadata:
 
 # GitHub Token Utilities
 
-This skill drives the [github-token-utilities](https://github.com/agentic-incubator/github-token-utilities) toolkit — three Node scripts
+This skill drives the [github-token-utilities](https://github.com/agentic-incubator/github-token-utilities) toolkit, a set of Node scripts
 that manage GitHub personal access tokens (PATs):
 
 | Action | Script (after setup) | What it does |
@@ -26,6 +26,7 @@ that manage GitHub personal access tokens (PATs):
 | **audit** | `node ~/audit.mjs` | Finds token-like Actions secrets across repos, shows when each was last set, and checks local `~/*.ght` token files for validity, expiry and permissions |
 | **rotate** | `node ~/rotate.mjs` | Replaces a repo's Actions secret with a new token |
 | **generate** | `node ~/generator.mjs` | Opens a prefilled GitHub "new token" page, takes the pasted token, verifies it, saves it to `~/<name>.ght` (mode 600) |
+| **revoke** | `node ~/revoke.mjs` | Permanently revokes a token (`--from NAME`, `--stored`, `--previous`), confirms GitHub rejects it, and removes local copies |
 | **store** | `node ~/store.mjs` | Writes a token into the shell secrets file loaded at startup (`GITHUB_TOKEN` plus a `GITHUB_PERSONAL_ACCESS_TOKEN` reference), for bash/zsh/sh, fish, csh/tcsh or PowerShell |
 
 Your job is to be a calm guide: figure out which action the user needs, check the
@@ -55,7 +56,7 @@ model context. So:
 - Steps that need a token pasted (generate, and rotate when it generates) are run **by the
   user in their own terminal**, using a complete command you prepare for them.
 - Confirm before: cloning, running setup, setting/overwriting a repo secret, deleting token
-  files, or changing file permissions. Show the dry-run output first where one exists.
+  files, changing file permissions, or revoking a token (irreversible). Show the dry-run output first where one exists.
 
 ## Step 0 — Pick the action
 
@@ -67,7 +68,8 @@ which of these they want, with a one-line description of each:
 2. **Rotate** — "replace the token stored in a repo secret"
 3. **Generate** — "make a new token"
 4. **Terminal token** — "refresh the short-lived GITHUB_TOKEN my shell loads"
-5. **Set up / update** the toolkit
+5. **Revoke** — "kill this token", "revoke the old one", "I leaked a token"
+6. **Set up / update** the toolkit
 
 ## Step 1 — Pre-flight (every time, before any action)
 
@@ -113,6 +115,7 @@ Read the matching reference file and follow it:
 | Rotate | [references/rotate.md](references/rotate.md) |
 | Generate | [references/generate.md](references/generate.md) |
 | Terminal token (store in the shell secrets file) | [references/terminal.md](references/terminal.md) |
+| Revoke | [references/revoke.md](references/revoke.md) |
 | Choosing scopes (used by rotate and generate) | [references/scopes.md](references/scopes.md) |
 | Anything fails | [references/troubleshooting.md](references/troubleshooting.md) |
 

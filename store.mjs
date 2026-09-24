@@ -20,10 +20,14 @@ import {
   maskToken,
   readClipboard,
   readEnvAssignment,
+  isRevocable,
   restrictToOwner,
+  revokeCredentials,
+  storedGhToken,
   upsertEnvToken,
   validateTokenName,
   verifyToken,
+  waitUntilRevoked,
 } from './gh-token-lib.mjs';
 
 const DEFAULT_PRIMARY = 'GITHUB_TOKEN';
@@ -72,6 +76,8 @@ Options:
   --no-verify            Skip checking the token with GitHub (implies no expiry check)
   --ensure-loaded        Add a line to your shell startup file / PowerShell profile
                          that loads the secrets file, if none is there yet
+  --revoke-previous      After storing, permanently revoke the token that was replaced
+                         (see revoke-gh-token --help for how revocation works)
   --no-backup            Don't keep <file>.bak of the previous version
   --dry-run              Show what would change; write nothing
   --yes                  Don't ask for confirmation
@@ -105,6 +111,7 @@ function parseArgs(argv) {
     else if (arg === '--no-verify') opts.verify = false;
     else if (arg === '--ensure-loaded') opts.ensureLoaded = true;
     else if (arg === '--no-backup') opts.backup = false;
+    else if (arg === '--revoke-previous') opts.revokePrevious = true;
     else if (arg === '--dry-run') opts.dryRun = true;
     else if (arg === '--yes' || arg === '-y') opts.yes = true;
     else if (arg === '-h' || arg === '--help') opts.help = true;
@@ -117,6 +124,7 @@ function parseArgs(argv) {
   if (!isEnvKey(opts.primary) || !opts.aliases.every(isEnvKey)) throw new Error('Variable names must match [A-Za-z_][A-Za-z0-9_]*');
   if (opts.aliases.includes(opts.primary)) throw new Error('--alias cannot be the same as --key');
   if (!Number.isInteger(opts.maxDays) || opts.maxDays <= 0) throw new Error('--max-days must be a positive integer');
+  if (opts.revokePrevious && !opts.verify) throw new Error('--revoke-previous needs verification; drop --no-verify');
   if (opts.from && (opts.tokenStdin || opts.generate)) throw new Error('--from cannot be combined with --token-stdin or --generate');
   const generateOnly = ['expiration', 'scopes', 'name'].filter((k) => opts[k] !== undefined);
   if (!opts.generate && generateOnly.length) throw new Error(`--${generateOnly[0]} only applies with --generate`);
@@ -432,9 +440,37 @@ async function main() {
   // 5. What about the token that was replaced?
   if (oldToken && oldToken !== token && isSafeEnvValue(oldToken) && opts.verify) {
     const old = verifyToken(oldToken);
-    console.log(old.ok
-      ? `\n⚠️  The replaced token (${maskToken(oldToken)}, ${old.login ?? 'unknown user'}) is STILL ACTIVE — revoke it at https://github.com/settings/tokens`
-      : `\nℹ️  The replaced token is already invalid (${old.error}); nothing to revoke.`);
+    if (!old.ok) {
+      console.log(`\nℹ️  The replaced token is already invalid (${old.error}); nothing to revoke.`);
+    } else if (!opts.revokePrevious) {
+      console.log(`\n⚠️  The replaced token (${maskToken(oldToken)}, ${old.login ?? 'unknown user'}) is STILL ACTIVE.`);
+      console.log('   Revoke it with: revoke-gh-token --previous   (or at https://github.com/settings/tokens)');
+    } else if (!isRevocable(oldToken) || oldToken === storedGhToken()) {
+      console.log(`\n⚠️  Not revoking the replaced token (${maskToken(oldToken)}): it is gh's own login token or not revocable.`);
+    } else {
+      console.log(`\n🗑  Revoking the replaced token (${maskToken(oldToken)}, ${old.login ?? 'unknown user'})...`);
+      let result;
+      try {
+        result = await revokeCredentials([oldToken]);
+      } catch (error) {
+        result = { ok: false, status: 0, message: error.message };
+      }
+      if (!result.ok) {
+        console.log(`❌ Revocation failed (${result.status || 'network'}${result.message ? `: ${result.message}` : ''}). Retry with: revoke-gh-token --previous`);
+        return 1;
+      }
+      const dead = await waitUntilRevoked(oldToken);
+      if (dead) {
+        console.log('✅ Revoked; GitHub now rejects it.');
+        // The backup's only purpose was undoing this edit, which would restore a dead token.
+        if (fs.existsSync(`${file}.bak`)) {
+          fs.rmSync(`${file}.bak`);
+          console.log(`🧹 Deleted ${file}.bak (it held the revoked token).`);
+        }
+      } else {
+        console.log('⚠️  GitHub accepted the revocation but still accepts the token; check again shortly.');
+      }
+    }
   }
 
   const reload = opts.format === 'powershell' ? `. "${file}"` : opts.format === 'sh' ? `. "${file}"` : `source "${file}"`;

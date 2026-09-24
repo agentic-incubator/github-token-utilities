@@ -86,7 +86,20 @@ from your clipboard and never shown. The command writes `GITHUB_TOKEN` (and `GIT
 automatically. Repeat before the token expires; `audit-gh-tokens --no-remote` warns a week
 ahead.
 
-## 7. Add the AI agent skill (optional)
+To also revoke the token being replaced, add `--revoke-previous`.
+
+## 7. Revoke a token you no longer need (optional)
+
+```bash
+revoke-gh-token --from my-first-token --dry-run   # see which account and scopes it has
+revoke-gh-token --from my-first-token             # type the account name to confirm
+```
+
+> [!CAUTION]
+> Revocation can't be undone, and GitHub emails you about it. Use `--web` to delete the token
+> on GitHub's settings page instead.
+
+## 8. Add the AI agent skill (optional)
 
 From the clone:
 
@@ -100,6 +113,6 @@ acme/api"*.
 
 ## Next steps
 
-- `gen-gh-token --help`, `audit-gh-tokens --help`, `rotate-gh-token --help`, `store-gh-token --help`
+- `gen-gh-token --help`, `audit-gh-tokens --help`, `rotate-gh-token --help`, `store-gh-token --help`, `revoke-gh-token --help`
 - [README → Choosing permissions and scopes](README.md#generate-a-token)
 - [README → Troubleshooting](README.md#troubleshooting)

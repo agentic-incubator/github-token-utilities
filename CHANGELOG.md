@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-09-24
+
+### Added
+
+- **`revoke-gh-token`** (`revoke.mjs`) permanently revokes a token and removes local copies.
+  - **Token sources:** `--from <name>` (a `.ght` file), `--stored` (the token your shell
+    secrets file exports), `--previous` (the token `store-gh-token` replaced, from the
+    `.bak` file), or `--token-stdin`.
+  - **Before revoking:** it shows the account, type, scopes and expiry, with the token
+    masked. It asks you to type the account name to confirm (`--yes` skips this), refuses
+    `gh`'s own login token without `--force`, and warns if your shell exports the token.
+  - **Revoking:** it uses GitHub's unauthenticated `POST /credentials/revoke`, then polls
+    until GitHub rejects the token.
+  - **Cleanup:** it deletes the `.ght` file, only the secrets-file variables holding that
+    token (and references to them), or the `.bak` file. `--keep-files` keeps them.
+  - **`--web`** opens GitHub's token settings page instead of calling the API.
+- `store-gh-token --revoke-previous` revokes the replaced token right after storing the new
+  one, and deletes the backup that held it.
+- Setup installs `revoke.mjs` and a `revoke-gh-token` alias for every supported shell.
+
+> [!CAUTION]
+> Revocation is irreversible and GitHub emails the token's owner. GitHub documents the
+> endpoint for credentials the caller does *not* own. Using it on your own token works, but
+> `--web` is the conservative alternative.
+
 ## [3.1.0] - 2026-09-24
 
 ### Added
@@ -115,5 +140,6 @@ All notable changes to this project are documented here. The format follows
 
 Initial release of `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `setup.mjs`.
 
+[3.2.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.2.0
 [3.1.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.1.0
 [3.0.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.0.0

@@ -276,3 +276,45 @@ test('currentGhLogin prefers the stored gh login over GITHUB_TOKEN, then falls b
   delete process.env.GITHUB_TOKEN;
   assert.equal(currentGhLogin(() => { throw new Error('x'); }), null);
 });
+
+import { keysHoldingToken, removeEnvAssignments, revokeCredentials, waitUntilRevoked } from '../gh-token-lib.mjs';
+
+test('removeEnvAssignments drops only the named keys', () => {
+  const { content, removed } = removeEnvAssignments('a=1\nexport GITHUB_TOKEN=x\nb=2\n', ['GITHUB_TOKEN']);
+  assert.equal(content, 'a=1\nb=2\n');
+  assert.deepEqual(removed, [{ key: 'GITHUB_TOKEN', line: 2 }]);
+  assert.equal(removeEnvAssignments('export GITHUB_TOKEN=x\n', ['GITHUB_TOKEN']).content, '');
+});
+
+test('keysHoldingToken finds literals and plain references to them', () => {
+  const sh = 'export GITHUB_TOKEN=ghp_a\nexport GITHUB_PERSONAL_ACCESS_TOKEN="$GITHUB_TOKEN"\nexport GH_TOKEN=ghp_b\n';
+  assert.deepEqual(keysHoldingToken(sh, 'ghp_a', ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN', 'GH_TOKEN']), ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN']);
+  const ps = "$env:GITHUB_TOKEN = 'ghp_a'\r\n$env:GITHUB_PERSONAL_ACCESS_TOKEN = $env:GITHUB_TOKEN\r\n";
+  assert.deepEqual(keysHoldingToken(ps, 'ghp_a', ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN'], 'powershell'), ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN']);
+  const csh = 'setenv GITHUB_TOKEN ghp_a\nsetenv GITHUB_PERSONAL_ACCESS_TOKEN "${GITHUB_TOKEN}"\n';
+  assert.deepEqual(keysHoldingToken(csh, 'ghp_a', ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN'], 'csh'), ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN']);
+});
+
+test('revokeCredentials posts unauthenticated JSON and treats only 202 as success', async () => {
+  let seen;
+  const fetchImpl = async (url, init) => {
+    seen = { url, init };
+    return { status: 202, json: async () => ({}) };
+  };
+  const result = await revokeCredentials(['ghp_x'], { fetchImpl, apiUrl: 'https://api.example/' });
+  assert.equal(result.ok, true);
+  assert.equal(seen.url, 'https://api.example/credentials/revoke');
+  assert.equal(seen.init.method, 'POST');
+  assert.equal(seen.init.headers.Authorization, undefined);
+  assert.deepEqual(JSON.parse(seen.init.body), { credentials: ['ghp_x'] });
+  const failed = await revokeCredentials(['ghp_x'], { fetchImpl: async () => ({ status: 422, json: async () => ({ message: 'Validation Failed' }) }) });
+  assert.deepEqual(failed, { ok: false, status: 422, message: 'Validation Failed' });
+});
+
+test('waitUntilRevoked polls until the token is rejected', async () => {
+  let calls = 0;
+  const verify = () => (++calls < 3 ? { ok: true } : { ok: false, error: 'invalid, revoked or expired' });
+  assert.equal(await waitUntilRevoked('t', { verify, sleep: async () => {} }), true);
+  assert.equal(calls, 3);
+  assert.equal(await waitUntilRevoked('t', { verify: () => ({ ok: true }), attempts: 2, sleep: async () => {} }), false);
+});

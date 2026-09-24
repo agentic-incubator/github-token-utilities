@@ -22,6 +22,9 @@ Match the symptom, explain the cause in one sentence, then offer the fix.
 | store: "PowerShell only dot-sources files ending in .ps1" | `--file` points at a non-`.ps1` file with `--format powershell` | Use a `.ps1` path |
 | New terminals still have the old `GITHUB_TOKEN` | The shell startup file doesn't load the secrets file | Re-run store with `--ensure-loaded` (the dry run shows which startup file it edits) |
 | Windows: profile/secrets file doesn't run | PowerShell execution policy blocks scripts | User runs `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
+| revoke: "GitHub answered 403" | The unauthenticated revocation endpoint allows 60 requests/hour per IP | Wait and retry, or `--web` to delete it on GitHub's settings page |
+| revoke: "GitHub still accepts it" | Revocation is asynchronous and hasn't finished | Re-run `node ~/audit.mjs --no-remote` in a minute; local copies were kept |
+| revoke: "logs gh out" | The token is `gh`'s own login token | Use `--force` only if the user wants to sign `gh` out; they'll need `gh auth login` |
 | Windows: `test`/`printenv` not found | Pre-flight commands are POSIX | Use PowerShell equivalents: `Test-Path ~/audit.mjs`, `if ($env:GITHUB_TOKEN) { 'GITHUB_TOKEN is set' }` |
 
 If none match, show the user the exact error line (never any token value) and read the

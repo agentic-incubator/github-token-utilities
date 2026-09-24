@@ -1,14 +1,15 @@
 # GitHub Token Utilities
 
 [![CI](https://github.com/agentic-incubator/github-token-utilities/actions/workflows/ci.yml/badge.svg)](https://github.com/agentic-incubator/github-token-utilities/actions/workflows/ci.yml)
-![version 3.1.0](https://img.shields.io/badge/version-3.1.0-blue)
+![version 3.2.0](https://img.shields.io/badge/version-3.2.0-blue)
 ![node >= 22](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)
 [![license MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Command-line tools and AI-agent skills for managing GitHub personal access tokens (PATs):
 **generate** them with the narrowest access, **audit** where they are stored and whether they
-are stale or expiring, **rotate** the ones kept in repository Actions secrets, and **store** a
-short-lived token in the secrets file your shell loads at startup. Works on macOS, Linux and
+are stale or expiring, **rotate** the ones kept in repository Actions secrets, **store** a
+short-lived token in the secrets file your shell loads at startup, and **revoke** tokens you
+no longer want. Works on macOS, Linux and
 Windows.
 
 The same workflows are packaged as an [Agent Skill](https://agentskills.io/specification)
@@ -34,6 +35,7 @@ confirmation before it changes anything.
   - [Audit tokens](#audit-tokens)
   - [Rotate a repository secret](#rotate-a-repository-secret)
   - [Store a terminal token](#store-a-terminal-token)
+  - [Revoke a token](#revoke-a-token)
 - [Compatibility](#compatibility)
 - [AI agent skills](#ai-agent-skills)
 - [Security model](#security-model)
@@ -49,6 +51,7 @@ confirmation before it changes anything.
 | `gen-gh-token` | [`generator.mjs`](generator.mjs) | Create a fine-grained or classic PAT, verify it, and save it to `~/<name>.ght` (mode `600`) |
 | `audit-gh-tokens` | [`audit.mjs`](audit.mjs) | Find token-like Actions secrets across your repos, and check local `~/*.ght` tokens and your shell secrets file for validity, expiry and file permissions |
 | `rotate-gh-token` | [`rotate.mjs`](rotate.mjs) | Replace a repository Actions secret with a new token |
+| `revoke-gh-token` | [`revoke.mjs`](revoke.mjs) | Permanently revoke a token, confirm GitHub rejects it, and remove local copies |
 | `store-gh-token` | [`store.mjs`](store.mjs) | Write a token into your shell secrets file (`GITHUB_TOKEN` + `GITHUB_PERSONAL_ACCESS_TOKEN`), for bash/zsh/sh/ksh/dash, fish, csh/tcsh or PowerShell |
 | — | [`setup.mjs`](setup.mjs) | Copy the scripts to your home directory and add the shell aliases |
 | — | [`gh-token-lib.mjs`](gh-token-lib.mjs) | Shared helpers (validation, URL building, token verification) |
@@ -75,13 +78,13 @@ Every [release](https://github.com/agentic-incubator/github-token-utilities/rele
 
 | Asset | Use |
 |---|---|
-| `github-token-utilities-<version>.tgz` | `npm install -g` it to get `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `store-gh-token` on your `PATH`. No npm registry is involved.[^npm-install] |
+| `github-token-utilities-<version>.tgz` | `npm install -g` it to get `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token`, `store-gh-token` and `revoke-gh-token` on your `PATH`. No npm registry is involved.[^npm-install] |
 | `github-token-utilities-<version>.zip` | The same files as a plain archive |
 | `github-token-utilities-skill-<host>-<version>.zip` | One per agent host. Unzip into that host's skills folder (see [AI agent skills](#ai-agent-skills)) |
 | `SHA256SUMS` | Checksums for all of the above |
 
 ```bash
-V=3.1.0
+V=3.2.0
 npm install -g "https://github.com/agentic-incubator/github-token-utilities/releases/download/v$V/github-token-utilities-$V.tgz"
 
 # Optional: verify the download was built by this repository's release workflow
@@ -111,9 +114,9 @@ node setup.mjs --dry-run   # preview: which files are copied, which shell config
 node setup.mjs             # apply
 ```
 
-Setup copies `generator.mjs`, `audit.mjs`, `rotate.mjs`, `store.mjs` and `gh-token-lib.mjs`
-into your home directory. It then adds the `gen-gh-token`, `audit-gh-tokens`,
-`rotate-gh-token` and `store-gh-token` aliases to the startup file of your shell, which it
+Setup copies `generator.mjs`, `audit.mjs`, `rotate.mjs`, `store.mjs`, `revoke.mjs` and
+`gh-token-lib.mjs` into your home directory. It then adds the `gen-gh-token`,
+`audit-gh-tokens`, `rotate-gh-token`, `store-gh-token` and `revoke-gh-token` aliases to the startup file of your shell, which it
 detects from `$SHELL`:
 
 | Shell | Startup file setup edits |
@@ -276,9 +279,10 @@ in `~/<name>.ght` (`--existing`). It then writes the token to the secret with
 `gh secret set`, passing the value on **standard input**.[^gh-secret-set]
 
 > [!IMPORTANT]
-> Rotation does **not** revoke the old token. It stays valid until you delete it at
-> <https://github.com/settings/tokens>. GitHub has no API for revoking your own PAT;
-> the credential-revocation endpoint is meant for tokens you *don't* own.[^revoke-api]
+> Rotation does **not** revoke the old token. It stays valid until you revoke it. GitHub never
+> reveals a secret's value, so the tool can't find the old token for you. If you still have
+> it locally, use [`revoke-gh-token --from <name>`](#revoke-a-token); otherwise delete it at
+> <https://github.com/settings/tokens>.
 
 > [!NOTE]
 > Actions secret names can contain only letters, numbers and underscores. They can't start
@@ -367,9 +371,46 @@ How it edits the file:
 > `audit-gh-tokens --no-remote` also checks the token in your secrets file and flags it
 > `EXPIRING_SOON` a week ahead, which is a good reminder to repeat these two commands.
 
+### Revoke a token
+
+```bash
+revoke-gh-token --from old-ci --dry-run   # preview: which account, scopes, expiry; what gets deleted
+revoke-gh-token --from old-ci             # ~/old-ci.ght
+revoke-gh-token --stored                  # the token your shell secrets file exports
+revoke-gh-token --previous                # the token store-gh-token last replaced (from the .bak)
+revoke-gh-token --from old-ci --web       # open GitHub's token page instead of calling the API
+```
+
+What it does:
+
+1. **Identifies the token.** It shows the account, type, scopes and expiry, with the value
+   masked, and asks you to type the account name to confirm (`--yes` skips this).
+2. **Checks for dangerous cases:**
+   - it refuses to revoke `gh`'s own login token, which would sign `gh` out, unless you pass
+     `--force`;
+   - it warns if your current shell exports the token.
+3. **Revokes it** through GitHub's credential-revocation API,[^revoke-api] then polls until
+   GitHub rejects the token.
+4. **Removes local copies.** The `.ght` file, only the secrets-file variables that held
+   this token (plus references to them), or the `.bak` file. `--keep-files` keeps them.
+
+If the token is already dead, it skips the API call and just cleans up. If GitHub refuses the
+call, nothing local is deleted.
+
+> [!CAUTION]
+> Revocation **cannot be undone**, and GitHub **emails the token's owner**. GitHub has no
+> authenticated "revoke my own token" API. The only endpoint is `POST /credentials/revoke`,
+> which must be called *unauthenticated*, allows 60 requests an hour, and is documented for
+> credentials the caller *doesn't* own.[^revoke-api] It accepts your own tokens too, but if you'd
+> rather stay within its documented purpose, use `--web` and click **Delete** on GitHub.
+
+> [!TIP]
+> To rotate your terminal token and kill the old one in one go, run
+> `store-gh-token --generate --expiration 7 --revoke-previous`.
+
 ## Compatibility
 
-Version **3.1.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version **3.2.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 | Component | Supported | Verified with |
 |---|---|---|
@@ -455,6 +496,8 @@ acme/api"* or *"make me a token that can push to acme/web"*.
 | Token file readable by others | Token and secrets files are owner-only: mode `600` on macOS/Linux (re-applied on overwrite), an owner-only ACL on Windows.[^icacls] The audit flags looser permissions. |
 | Code injection through the shell secrets file | Only `[A-Za-z0-9_]` values are written, and references use the shell's own variable syntax. The file is replaced atomically, with a backup. |
 | Long-lived terminal tokens | `store-gh-token` refuses tokens that never expire or outlive `--max-days`. |
+| Revoking the wrong token | `revoke-gh-token` shows the account and scopes, requires typing the account name, refuses `gh`'s own login token, and deletes local copies only after GitHub confirms the token is dead. |
+| Replaced tokens staying active | `store-gh-token` reports whether the replaced token is still active, and `--revoke-previous` revokes it. |
 | Broad tokens | Fine-grained tokens are the recommended default,[^pat-docs] and the generator warns on high-risk classic scopes. |
 | Stale `GITHUB_TOKEN` hijacking `gh` | Token verification removes `GITHUB_TOKEN` from the child environment, and the skills check for the variable first. |
 | Injection through repository or secret names | Inputs are validated against GitHub's naming rules,[^secrets] and `gh` is called with argument arrays, never through a shell. |
@@ -473,6 +516,8 @@ acme/api"* or *"make me a token that can push to acme/web"*.
 | Browser doesn't open | Re-run with `--no-open` and open the printed URL |
 | `store-gh-token`: "lives longer than --max-days" | Generate a token with a shorter expiration, or pass `--max-days N` / `--force` |
 | New terminal still has the old `GITHUB_TOKEN` | Your startup file doesn't load the secrets file; re-run `store-gh-token` with `--ensure-loaded` |
+| `revoke-gh-token`: "GitHub answered 403" | The revocation endpoint allows 60 unauthenticated requests an hour per IP; wait, or use `--web`[^revoke-api] |
+| `revoke-gh-token`: "GitHub still accepts it" | Revocation is asynchronous; check again shortly with `audit-gh-tokens --no-remote` (local copies were kept) |
 | Windows: the profile or secrets file doesn't load | PowerShell's execution policy blocks scripts by default on Windows;[^ps-scripts] run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` |
 
 ## Development
@@ -536,7 +581,7 @@ only observed in practice, or undocumented. The sources cited above:
 [^secrets-api]: GitHub Docs, *REST API endpoints for GitHub Actions secrets*: required access and the `repo` scope. <https://docs.github.com/en/rest/actions/secrets>
 [^packages]: GitHub Docs, *About permissions for GitHub Packages*: "GitHub Packages only supports authentication using a personal access token (classic)." <https://docs.github.com/en/packages/learn-github-packages/about-permissions-for-github-packages>
 [^org-pat-policy]: GitHub Docs, *Setting a personal access token policy for your organization*. <https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization>
-[^revoke-api]: GitHub Docs, *REST API endpoints for revocation*: `POST /credentials/revoke` is unauthenticated and intended for credentials the caller doesn't own. <https://docs.github.com/en/rest/credentials/revoke>
+[^revoke-api]: GitHub Docs, *REST API endpoints for revocation*: `POST /credentials/revoke` accepts `ghp_`/`github_pat_`/`gho_`/`ghu_`/`ghr_` tokens; authenticated requests return 403; 60 requests/hour; returns 202; owners are notified; revoked credentials can't be reactivated; intended for credentials the caller doesn't own. <https://docs.github.com/en/rest/credentials/revoke>
 [^gh-env]: GitHub CLI manual, *gh help environment*: `GH_TOKEN`, then `GITHUB_TOKEN`, take precedence over stored credentials. <https://cli.github.com/manual/gh_help_environment>
 [^gh-auth-login]: GitHub CLI manual, *gh auth login*. <https://cli.github.com/manual/gh_auth_login>
 [^gh-secret-set]: GitHub CLI manual, *gh secret set*: `--body` "reads from standard input if not specified". <https://cli.github.com/manual/gh_secret_set>

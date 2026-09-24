@@ -1,13 +1,14 @@
 {
   "name": "github-token-utilities",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "CLI tools and cross-agent skills for managing GitHub personal access tokens: generate, audit, and rotate",
   "type": "module",
   "bin": {
     "gen-gh-token": "./generator.mjs",
     "audit-gh-tokens": "./audit.mjs",
     "rotate-gh-token": "./rotate.mjs",
-    "store-gh-token": "./store.mjs"
+    "store-gh-token": "./store.mjs",
+    "revoke-gh-token": "./revoke.mjs"
   },
   "scripts": {
     "setup": "node setup.mjs",
@@ -20,7 +21,8 @@
     "install:skills": "node scripts/install-skills.mjs",
     "validate:skills": "node scripts/build-skills.mjs --check && for d in skills/dist/*/github-token-utilities; do uvx --from skills-ref agentskills validate \"$d\" || exit 1; done",
     "store": "node store.mjs",
-    "package": "node scripts/package-release.mjs"
+    "package": "node scripts/package-release.mjs",
+    "revoke": "node revoke.mjs"
   },
   "keywords": [
     "github",
@@ -39,7 +41,8 @@
     "opencode",
     "gemini-cli",
     "hermes-agent",
-    "grok"
+    "grok",
+    "revoke"
   ],
   "author": "agentic-incubator",
   "license": "MIT",
@@ -60,6 +63,7 @@
     "rotate.mjs",
     "setup.mjs",
     "store.mjs",
+    "revoke.mjs",
     "gh-token-lib.mjs",
     "skills/",
     "scripts/",

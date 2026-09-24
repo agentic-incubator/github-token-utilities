@@ -1,12 +1,12 @@
 // End-to-end tests for the CLI scripts. A fake `gh` on PATH records every call, so nothing
 // touches GitHub and we can assert that tokens never appear in command-line arguments.
 
-import { test, beforeEach, afterEach } from 'node:test';
+import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,6 +15,48 @@ const TOKEN = 'ghp_FAKE_test_token_for_cli_tests';
 let home;
 let binDir;
 let logFile;
+
+// A fake GitHub API for POST /credentials/revoke, run as its own process because the CLI
+// tests block on spawnSync. It records each request and marks the tokens revoked, which the
+// fake gh then honours (401). Write a status code into STATUS_FILE to make it fail.
+const serverDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gtu-api-'));
+const revokedFile = path.join(serverDir, 'revoked.txt');
+const requestsFile = path.join(serverDir, 'requests.jsonl');
+const statusFile = path.join(serverDir, 'status.txt');
+let apiUrl;
+let server;
+
+const FAKE_API = `
+const http = require('http'); const fs = require('fs');
+const [revoked, requests, statusFile] = process.argv.slice(1);
+http.createServer((req, res) => {
+  let body = '';
+  req.on('data', (c) => (body += c));
+  req.on('end', () => {
+    fs.appendFileSync(requests, JSON.stringify({ method: req.method, url: req.url, headers: req.headers, body }) + '\\n');
+    const status = fs.existsSync(statusFile) ? Number(fs.readFileSync(statusFile, 'utf-8')) : 202;
+    if (status === 202) for (const t of JSON.parse(body).credentials) fs.appendFileSync(revoked, t + '\\n');
+    res.writeHead(status, { 'content-type': 'application/json' });
+    res.end(status === 202 ? '{}' : JSON.stringify({ message: 'nope' }));
+  });
+}).listen(0, '127.0.0.1', function () { process.stdout.write(String(this.address().port) + '\\n'); });
+`;
+
+before(async () => {
+  server = spawn(process.execPath, ['-e', FAKE_API, revokedFile, requestsFile, statusFile], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const port = await new Promise((resolve) => server.stdout.once('data', (d) => resolve(String(d).trim())));
+  apiUrl = `http://127.0.0.1:${port}`;
+});
+
+after(() => {
+  server.kill();
+  fs.rmSync(serverDir, { recursive: true, force: true });
+});
+
+function apiRequests() {
+  if (!fs.existsSync(requestsFile)) return [];
+  return fs.readFileSync(requestsFile, 'utf-8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l));
+}
 
 const FAKE_GH = `#!/usr/bin/env node
 const fs = require('fs');
@@ -26,12 +68,16 @@ let stdin = '';
 if (cmd === 'secret set') { try { stdin = fs.readFileSync(0, 'utf-8'); } catch {} }
 fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ args, stdin, ghToken: process.env.GH_TOKEN || null }) + '\\n');
 if (cmd === 'api -i') {
-  if ((process.env.GH_TOKEN || '').includes('REVOKED')) { process.stderr.write('HTTP 401: Bad credentials'); process.exit(1); }
+  const revoked = process.env.FAKE_REVOKED_FILE && fs.existsSync(process.env.FAKE_REVOKED_FILE) ? fs.readFileSync(process.env.FAKE_REVOKED_FILE, 'utf-8').split('\\n') : [];
+  if ((process.env.GH_TOKEN || '').includes('REVOKED') || revoked.includes(process.env.GH_TOKEN)) { process.stderr.write('HTTP 401: Bad credentials'); process.exit(1); }
   const expiry = process.env.FAKE_GH_EXPIRY || '2099-01-01 00:00:00 UTC';
   const tokenLogin = process.env.FAKE_GH_TOKEN_LOGIN || 'octocat';
   process.stdout.write('HTTP/2.0 200 OK\\r\\nX-Oauth-Scopes: repo\\r\\nGithub-Authentication-Token-Expiration: ' + expiry + '\\r\\n\\r\\n{"login":"' + tokenLogin + '"}');
 } else if (cmd === 'api user') {
   process.stdout.write((process.env.FAKE_GH_LOGIN || 'octocat') + '\\n');
+} else if (cmd === 'auth token') {
+  if (!process.env.FAKE_GH_STORED_TOKEN) { process.stderr.write('no token'); process.exit(1); }
+  process.stdout.write(process.env.FAKE_GH_STORED_TOKEN + '\\n');
 } else if (cmd === 'repo view') {
   process.stdout.write('{"nameWithOwner":"acme/api"}');
 } else if (cmd === 'repo list') {
@@ -51,7 +97,7 @@ if (cmd === 'api -i') {
 `;
 
 function run(script, args, { input, env: extraEnv = {} } = {}) {
-  const env = { ...process.env, HOME: home, USERPROFILE: home, GTU_GH_SHIM: path.join(binDir, 'fake-gh.cjs'), FAKE_GH_LOG: logFile, ...extraEnv };
+  const env = { ...process.env, HOME: home, USERPROFILE: home, GTU_GH_SHIM: path.join(binDir, 'fake-gh.cjs'), FAKE_GH_LOG: logFile, GTU_API_URL: apiUrl, FAKE_REVOKED_FILE: revokedFile, ...extraEnv };
   delete env.GH_TOKEN;
   delete env.GITHUB_TOKEN;
   return spawnSync(process.execPath, [path.join(ROOT, script), ...args], { env, input, encoding: 'utf-8' });
@@ -63,6 +109,7 @@ function ghCalls() {
 }
 
 beforeEach(() => {
+  for (const f of [revokedFile, requestsFile, statusFile]) fs.rmSync(f, { force: true });
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'gtu-home-'));
   binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gtu-bin-'));
   logFile = path.join(binDir, 'calls.jsonl');
@@ -306,4 +353,106 @@ test('store validates --generate option combinations', () => {
   assert.match(run('store.mjs', ['--generate', '--from', 'x']).stderr, /cannot be combined/);
   assert.match(run('store.mjs', ['--scopes', 'repo']).stderr, /only applies with --generate/);
   assert.match(run('store.mjs', ['--generate', '--no-verify']).stderr, /needs verification/);
+});
+
+// ── revoke-gh-token ──────────────────────────────────────────────────────────
+
+test('revoke --from calls the revocation API unauthenticated, confirms, and deletes the file', () => {
+  fs.writeFileSync(path.join(home, 'old.ght'), TOKEN, { mode: 0o600 });
+  const result = run('revoke.mjs', ['--from', 'old', '--yes']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const [req] = apiRequests();
+  assert.equal(req.method, 'POST');
+  assert.equal(req.url, '/credentials/revoke');
+  assert.equal(req.headers.authorization, undefined, 'must be unauthenticated');
+  assert.deepEqual(JSON.parse(req.body), { credentials: [TOKEN] });
+  assert.match(result.stdout, /GitHub accepted the revocation/);
+  assert.match(result.stdout, /Waiting for GitHub to reject the token\.\.\. done/);
+  assert.ok(!fs.existsSync(path.join(home, 'old.ght')));
+  assert.ok(!result.stdout.includes(TOKEN));
+});
+
+test('revoke --dry-run calls nothing and keeps the file', () => {
+  fs.writeFileSync(path.join(home, 'old.ght'), TOKEN, { mode: 0o600 });
+  const result = run('revoke.mjs', ['--from', 'old', '--dry-run']);
+  assert.equal(result.status, 0, result.stdout);
+  assert.match(result.stdout, /Dry run/);
+  assert.equal(apiRequests().length, 0);
+  assert.ok(fs.existsSync(path.join(home, 'old.ght')));
+});
+
+test('revoke --stored removes only the variables holding that token', () => {
+  const file = path.join(home, '.secrets.env');
+  fs.writeFileSync(file, [
+    'export OTHER=keep',
+    `export GITHUB_TOKEN=${TOKEN}`,
+    'export GITHUB_PERSONAL_ACCESS_TOKEN="$GITHUB_TOKEN"',
+    'export GH_TOKEN=ghp_FAKE_different_token',
+    '',
+  ].join('\n'));
+  const result = run('revoke.mjs', ['--stored', '--format', 'sh', '--yes']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(fs.readFileSync(file, 'utf-8'), 'export OTHER=keep\nexport GH_TOKEN=ghp_FAKE_different_token\n');
+});
+
+test('revoke --previous revokes the token store-gh-token replaced and deletes the backup', () => {
+  const file = path.join(home, '.secrets.env');
+  fs.writeFileSync(file, `export GITHUB_TOKEN=ghp_FAKE_current_token\n`);
+  fs.writeFileSync(`${file}.bak`, `export GITHUB_TOKEN=${TOKEN}\n`);
+  const result = run('revoke.mjs', ['--previous', '--format', 'sh', '--yes']);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(JSON.parse(apiRequests()[0].body).credentials, [TOKEN]);
+  assert.ok(!fs.existsSync(`${file}.bak`));
+  assert.equal(fs.readFileSync(file, 'utf-8'), 'export GITHUB_TOKEN=ghp_FAKE_current_token\n');
+});
+
+test('revoke skips the API for an already-dead token but still cleans up', () => {
+  fs.writeFileSync(path.join(home, 'dead.ght'), 'ghp_FAKE_REVOKED_token', { mode: 0o600 });
+  const result = run('revoke.mjs', ['--from', 'dead', '--yes']);
+  assert.equal(result.status, 0, result.stdout);
+  assert.match(result.stdout, /already rejects this token/);
+  assert.equal(apiRequests().length, 0);
+  assert.ok(!fs.existsSync(path.join(home, 'dead.ght')));
+});
+
+test("revoke refuses gh's own login token without --force", () => {
+  fs.writeFileSync(path.join(home, 'gh.ght'), TOKEN, { mode: 0o600 });
+  const result = run('revoke.mjs', ['--from', 'gh', '--yes'], { env: { FAKE_GH_STORED_TOKEN: TOKEN } });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /logs gh out/);
+  assert.equal(apiRequests().length, 0);
+});
+
+test('revoke keeps local copies when the API refuses', () => {
+  fs.writeFileSync(path.join(home, 'old.ght'), TOKEN, { mode: 0o600 });
+  fs.writeFileSync(statusFile, '403');
+  const result = run('revoke.mjs', ['--from', 'old', '--yes']);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /GitHub answered 403.*rate limit/);
+  assert.ok(fs.existsSync(path.join(home, 'old.ght')));
+});
+
+test('revoke requires confirmation when not interactive', () => {
+  fs.writeFileSync(path.join(home, 'old.ght'), TOKEN, { mode: 0o600 });
+  const result = run('revoke.mjs', ['--from', 'old']);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Confirmation needed/);
+  assert.equal(apiRequests().length, 0);
+});
+
+test('revoke needs exactly one token source', () => {
+  assert.match(run('revoke.mjs', []).stderr, /exactly one/);
+  assert.match(run('revoke.mjs', ['--stored', '--previous']).stderr, /exactly one|only one/);
+});
+
+test('store --revoke-previous revokes the replaced token and deletes the backup', () => {
+  const OLD = 'ghp_FAKE_old_terminal_token';
+  const file = path.join(home, '.secrets.env');
+  fs.writeFileSync(file, `export GITHUB_TOKEN=${OLD}\n`);
+  const result = run('store.mjs', ['--format', 'sh', '--token-stdin', '--yes', '--revoke-previous'], { input: TOKEN, env: { FAKE_GH_EXPIRY: SOON() } });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.deepEqual(JSON.parse(apiRequests()[0].body).credentials, [OLD]);
+  assert.match(result.stdout, /Revoked; GitHub now rejects it/);
+  assert.ok(!fs.existsSync(`${file}.bak`));
+  assert.match(fs.readFileSync(file, 'utf-8'), new RegExp(`GITHUB_TOKEN=${TOKEN}`));
 });

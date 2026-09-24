@@ -40,7 +40,8 @@ user lacks admin rights can't have their secrets listed — they appear in `remo
 Lead with what needs action, most urgent first, then a one-line all-clear for the rest:
 
 1. Local tokens that are `INVALID`/`EXPIRED` — useless files; suggest deleting after they
-   confirm nothing still reads them.
+   confirm nothing still reads them (`node ~/revoke.mjs --from NAME` does this safely: it
+   skips the API for a dead token and only removes the file).
 2. `EXPIRING_SOON` / `NEARING_EXPIRATION` tokens, and `STALE` secrets — suggest a rotation for
    each (offer to start `rotate` for the first one). For the secrets-file entry, offer the
    terminal-token workflow instead.

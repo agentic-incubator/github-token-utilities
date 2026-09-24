@@ -343,6 +343,12 @@ function formatSpec(format) {
 // Returns the literal value assigned to `key` (last assignment wins, as in the shell), or
 // null when it is unset or assigned from another variable.
 export function readEnvAssignment(content, key, format = 'sh') {
+  const raw = readEnvRaw(content, key, format);
+  return raw === null || raw.includes('$') ? null : raw;
+}
+
+// The raw right-hand side of the last assignment of `key` (quotes stripped), or null.
+export function readEnvRaw(content, key, format = 'sh') {
   const spec = formatSpec(format);
   let value = null;
   for (const line of content.split(/\r?\n/)) {
@@ -350,9 +356,21 @@ export function readEnvAssignment(content, key, format = 'sh') {
     if (!match) continue;
     let raw = match[1].replace(/\s+#.*$/, '').trim();
     if (/^(['"]).*\1$/.test(raw)) raw = raw.slice(1, -1);
-    value = raw.includes('$') ? null : raw;
+    value = raw;
   }
   return value;
+}
+
+// Keys (from `candidates`) that hold `token` literally, plus keys that only reference one of
+// those ($KEY, ${KEY}, $env:KEY). Used to clean up after revoking a stored token.
+export function keysHoldingToken(content, token, candidates, format = 'sh') {
+  const holding = candidates.filter((k) => readEnvAssignment(content, k, format) === token);
+  const refs = candidates.filter((k) => {
+    if (holding.includes(k)) return false;
+    const raw = readEnvRaw(content, k, format);
+    return raw !== null && holding.some((h) => new RegExp(`^\\$(?:env:)?\\{?${h}\\}?$`, 'i').test(raw));
+  });
+  return [...holding, ...refs];
 }
 
 // Replaces every assignment of `primary` and `aliases` with one managed block, placed where
@@ -507,4 +525,75 @@ export function readClipboard({ platform = process.platform, env = process.env, 
     }
   }
   return null;
+}
+
+// ── Revocation ───────────────────────────────────────────────────────────────
+// POST /credentials/revoke accepts ghp_, github_pat_, gho_, ghu_ and ghr_ tokens (up to 1000
+// per call), must be called UNAUTHENTICATED (authenticated calls get 403), is limited to 60
+// requests/hour, returns 202 Accepted, is irreversible, and notifies the token's owner. GitHub
+// describes it as for credentials "the caller does not own" or tied to an account the caller
+// lost access to. https://docs.github.com/en/rest/credentials/revoke
+// GTU_API_URL overrides the API base (used by the test suite).
+
+export const REVOCABLE_PREFIXES = ['ghp_', 'github_pat_', 'gho_', 'ghu_', 'ghr_'];
+
+export function isRevocable(token) {
+  return REVOCABLE_PREFIXES.some((p) => (token || '').startsWith(p));
+}
+
+export async function revokeCredentials(tokens, { fetchImpl = globalThis.fetch, apiUrl = process.env.GTU_API_URL || 'https://api.github.com' } = {}) {
+  const response = await fetchImpl(`${apiUrl.replace(/\/$/, '')}/credentials/revoke`, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'github-token-utilities',
+    },
+    body: JSON.stringify({ credentials: tokens }),
+  });
+  let message = '';
+  try {
+    message = (await response.json())?.message ?? '';
+  } catch {
+    // 202 responses have no useful body.
+  }
+  return { ok: response.status === 202, status: response.status, message };
+}
+
+// Revocation is asynchronous (202). Poll GET /user until the token is rejected.
+export async function waitUntilRevoked(token, { verify = verifyToken, attempts = 10, delayMs = 3000, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  for (let i = 0; i < attempts; i++) {
+    const check = verify(token);
+    if (!check.ok && /invalid|revoked|expired/.test(check.error || '')) return true;
+    if (i < attempts - 1) await sleep(delayMs);
+  }
+  return false;
+}
+
+// Removes every assignment of `keys` from a secrets file. Other lines are untouched.
+export function removeEnvAssignments(content, keys, format = 'sh') {
+  const spec = formatSpec(format);
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  const lines = content === '' ? [] : content.replace(/\r?\n$/, '').split(/\r?\n/);
+  const removed = [];
+  const kept = lines.filter((line, index) => {
+    const key = keys.find((k) => spec.matches(k).test(line));
+    if (key) removed.push({ key, line: index + 1 });
+    return !key;
+  });
+  return { content: kept.length ? kept.join(eol) + eol : '', removed };
+}
+
+// The token gh itself uses from its stored login (not the environment), or null.
+export function storedGhToken(run = execFileSync) {
+  const env = { ...process.env };
+  delete env.GH_TOKEN;
+  delete env.GITHUB_TOKEN;
+  try {
+    const call = gh(['auth', 'token']);
+    return run(call.cmd, call.args, { env, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+  } catch {
+    return null;
+  }
 }

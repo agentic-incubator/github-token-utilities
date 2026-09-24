@@ -68,8 +68,11 @@ node ~/rotate.mjs OWNER/REPO SECRET_NAME --existing NAME --yes
   just now.
 - Offer to re-run a workflow that uses the secret to prove the token works (list with
   `gh workflow list --repo OWNER/REPO`; run only after they pick one and confirm).
-- Remind them to **revoke the old token** at https://github.com/settings/tokens — rotation
-  doesn't revoke it, and the old value is still live until they do.
+- Remind them to **revoke the old token**. Rotation doesn't revoke it, and the old value stays
+  live until they do. GitHub never reveals a secret's value, so the script can't find the old
+  token by itself. If they still have it locally (`~/OLD.ght`), offer
+  `node ~/revoke.mjs --from OLD` (`references/revoke.md`); otherwise point them to
+  https://github.com/settings/tokens.
 - The new token file can stay (useful for the next rotation audit) or be deleted
   (`rm ~/NAME.ght`) if they don't need a local copy — their choice, confirm before deleting.
 
