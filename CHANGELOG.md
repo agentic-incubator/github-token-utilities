@@ -45,7 +45,8 @@ All notable changes to this project are documented here. The format follows
   - end-to-end tests against a fake `gh`;
   - skill portability tests;
   - tests that load generated files in real shells.
-- CI on Ubuntu, macOS and Windows with Node 22 and 24, plus skill validation.
+- CI on Ubuntu, macOS and Windows with Node 22 and 24, plus skill validation. Actions are
+  pinned to commit SHAs, and Dependabot checks GitHub Actions and npm weekly.
 - `docs/EVIDENCE.md` traces every external behavior to a public source. Also added
   `CHANGELOG.md` and `LICENSE`.
 

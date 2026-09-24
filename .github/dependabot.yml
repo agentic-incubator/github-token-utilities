@@ -1,0 +1,25 @@
+# Weekly dependency updates. Actions in ci.yml are pinned to commit SHAs; Dependabot bumps
+# the SHA and its "# vX.Y.Z" comment together.
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+
+  # No runtime dependencies today; this covers any that are added later.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+    commit-message:
+      prefix: deps

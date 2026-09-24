@@ -76,17 +76,26 @@ node setup.mjs             # apply
 
 Setup copies `generator.mjs`, `audit.mjs`, `rotate.mjs`, `store.mjs` and `gh-token-lib.mjs`
 into your home directory. It then adds the `gen-gh-token`, `audit-gh-tokens`,
-`rotate-gh-token` and `store-gh-token` aliases to the startup file for your shell:
+`rotate-gh-token` and `store-gh-token` aliases to the startup file of your shell, which it
+detects from `$SHELL`:
 
-| Shell (`$SHELL`) | Startup file | Alias syntax |
-|---|---|---|
-| zsh | `~/.zshrc` | `alias name="cmd"` |
-| bash | `~/.bash_profile` (macOS) / `~/.bashrc` (Linux)[^bash-startup] | `alias name="cmd"` |
-| ksh | `~/.kshrc`, else `~/.profile` | `alias name="cmd"` |
-| sh, dash, other | `~/.profile` | `alias name="cmd"` |
-| fish | `~/.config/fish/conf.d/github-token-utilities.fish`[^fish-config] | `alias name 'cmd'` |
-| tcsh / csh | `~/.tcshrc`, else `~/.cshrc`[^tcsh] | `alias name 'cmd'` |
-| PowerShell (Windows) | the profile PowerShell reports for the current user[^ps-profiles] | `function name { … }` |
+| Shell | Startup file setup edits |
+|---|---|
+| zsh | `~/.zshrc` |
+| bash | `~/.bash_profile` on macOS, `~/.bashrc` on Linux[^bash-startup] |
+| ksh | `~/.kshrc`, else `~/.profile` |
+| sh, dash, or anything else | `~/.profile` |
+| fish | `~/.config/fish/conf.d/github-token-utilities.fish`[^fish-config] |
+| tcsh / csh | `~/.tcshrc`, else `~/.cshrc`[^tcsh] |
+| PowerShell (Windows) | the profile PowerShell reports for the current user[^ps-profiles] |
+
+The line it writes differs only by shell family. Here is `store-gh-token` as an example:
+
+| Shells | Line added |
+|---|---|
+| zsh, bash, ksh, sh, dash | `alias store-gh-token="node ~/store.mjs"` |
+| fish, tcsh, csh | `alias store-gh-token 'node ~/store.mjs'` (no `=`) |
+| PowerShell | `function store-gh-token { node $HOME/store.mjs @args }` |
 
 Re-running setup is safe: it refreshes the scripts and skips aliases that already exist.
 
@@ -314,6 +323,8 @@ Version **3.0.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 The GitHub Actions used in CI are pinned to commit SHAs: `actions/checkout` v7.0.1,
 `actions/setup-node` v7.0.0, `astral-sh/setup-uv` v10.2.0.
+[Dependabot](.github/dependabot.yml) checks them (and npm) every week and opens grouped
+update PRs that bump each SHA and its version comment together.[^dependabot]
 
 ## AI agent skills
 
@@ -459,6 +470,7 @@ only observed in practice, or undocumented. The sources cited above:
 [^ps-profiles]: Microsoft Learn, *about_Profiles* (`$PROFILE.CurrentUserAllHosts`). <https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_profiles>
 [^ps-scripts]: Microsoft Learn, *about_Scripts*: scripts use the `.ps1` extension, dot sourcing runs them in the current scope, and Windows' default execution policy blocks scripts. <https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_scripts>
 [^icacls]: Microsoft Learn, *icacls* (`/inheritance:r`, `/grant:r`). <https://learn.microsoft.com/windows-server/administration/windows-commands/icacls>
+[^dependabot]: GitHub Docs, *Dependabot options reference* (`package-ecosystem`, `schedule.interval`, `groups`). <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference>
 [^agentskills-spec]: Agent Skills specification: `SKILL.md` frontmatter fields and limits, directory layout. <https://agentskills.io/specification>
 [^claude-skills]: Claude Code Docs, *Skills*. <https://code.claude.com/docs/en/skills>
 [^codex-skills]: OpenAI Codex, *Build skills* (`~/.agents/skills`, `$skill-name`) <https://developers.openai.com/codex/skills>. Deprecated `$CODEX_HOME/skills` path: `codex-rs/ext/skills/src/host_roots.rs` in <https://github.com/openai/codex>

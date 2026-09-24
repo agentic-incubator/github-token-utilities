@@ -24,7 +24,9 @@ github-token-utilities/
 │   └── shells.test.mjs      # generated files loaded in real bash/zsh/sh/dash/ksh/fish/csh/tcsh/pwsh
 ├── docs/
 │   └── EVIDENCE.md          # every external behavior relied on, with sources
-├── .github/workflows/ci.yml # tests on Ubuntu/macOS/Windows × Node 22/24; skill validation
+├── .github/
+│   ├── workflows/ci.yml     # tests on Ubuntu/macOS/Windows × Node 22/24; skill validation
+│   └── dependabot.yml       # weekly GitHub Actions + npm updates
 ├── README.md
 ├── QUICKSTART.md
 ├── CHANGELOG.md

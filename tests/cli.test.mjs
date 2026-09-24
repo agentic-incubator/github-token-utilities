@@ -19,10 +19,12 @@ let logFile;
 const FAKE_GH = `#!/usr/bin/env node
 const fs = require('fs');
 const args = process.argv.slice(2);
-let stdin = '';
-try { if (!process.stdin.isTTY) stdin = fs.readFileSync(0, 'utf-8'); } catch {}
-fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ args, stdin, ghToken: process.env.GH_TOKEN || null }) + '\\n');
 const cmd = args.slice(0, 2).join(' ');
+// Only "secret set" sends data on stdin. Reading it for other commands would block forever
+// on Windows, where callers like execFile leave an open, empty stdin pipe.
+let stdin = '';
+if (cmd === 'secret set') { try { stdin = fs.readFileSync(0, 'utf-8'); } catch {} }
+fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ args, stdin, ghToken: process.env.GH_TOKEN || null }) + '\\n');
 if (cmd === 'api -i') {
   if ((process.env.GH_TOKEN || '').includes('REVOKED')) { process.stderr.write('HTTP 401: Bad credentials'); process.exit(1); }
   const expiry = process.env.FAKE_GH_EXPIRY || '2099-01-01 00:00:00 UTC';
