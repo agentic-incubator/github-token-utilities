@@ -1,0 +1,88 @@
+{
+  "skill": {
+    "name": "github-token-utilities",
+    "repo": "agentic-incubator/github-token-utilities",
+    "license": "MIT",
+    "description": "Audit, rotate and generate GitHub personal access tokens. Sets up and drives the github-token-utilities toolkit. Use whenever the user wants to create a GitHub token or PAT, find which repos hold token secrets like GH_TOKEN or GH_PAT, check for stale, expiring or invalid tokens, rotate or replace a repository Actions secret, install or update these token scripts, or mentions gen-gh-token, audit-gh-tokens or rotate-gh-token - even if they don't name the toolkit.",
+    "compatibility": "Requires Node.js 22+, git, and the GitHub CLI (gh) authenticated to github.com. Works on macOS, Linux and Windows; bash, zsh, sh, ksh, dash, fish, csh/tcsh and PowerShell.",
+    "shortDescription": "Audit, rotate and generate GitHub tokens",
+    "author": "agentic-incubator"
+  },
+  "hosts": {
+    "claude": {
+      "displayName": "Claude Code",
+      "installUser": "~/.claude/skills",
+      "installProject": ".claude/skills",
+      "invoke": "/github-token-utilities",
+      "ask": "Use the `AskUserQuestion` tool for choices and confirmations (up to 4 questions at once, each with 2-4 options).",
+      "shell": "Use the `Bash` tool.",
+      "userRun": "Ask the user to run the command in a separate terminal window. Don't suggest Claude Code's `!` prefix for these: the hidden token prompt needs an interactive terminal.",
+      "extraNotes": "",
+      "metadata": {}
+    },
+    "codex": {
+      "displayName": "OpenAI Codex CLI",
+      "installUser": "~/.agents/skills",
+      "installProject": ".agents/skills",
+      "invoke": "$github-token-utilities",
+      "ask": "Ask in plain text, number the options, and wait for the reply before continuing. (`request_user_input` is only available in Plan mode, so don't depend on it.)",
+      "shell": "Use your shell tool (`exec_command`). Commands in this skill are non-interactive, except those you hand to the user.",
+      "userRun": "Ask the user to run the command in a separate terminal window, then tell you when it finishes.",
+      "extraNotes": "",
+      "metadata": {}
+    },
+    "opencode": {
+      "displayName": "OpenCode",
+      "installUser": "~/.config/opencode/skills",
+      "installProject": ".opencode/skills",
+      "invoke": "ask for it by name, e.g. \"use the github-token-utilities skill\"",
+      "ask": "Use the `question` tool for choices and confirmations.",
+      "shell": "Use the `bash` tool.",
+      "userRun": "Ask the user to run the command in a separate terminal window, then tell you when it finishes.",
+      "extraNotes": "",
+      "metadata": {}
+    },
+    "gemini": {
+      "displayName": "Gemini CLI",
+      "installUser": "~/.gemini/skills",
+      "installProject": ".gemini/skills",
+      "invoke": "ask for it by name; manage with /skills list",
+      "ask": "Use the `ask_user` tool (choice, yesno or text questions; up to 4 at once).",
+      "shell": "Use the `run_shell_command` tool.",
+      "userRun": "Ask the user to run the command in a separate terminal window, then tell you when it finishes. Gemini CLI's `!` shell mode is interactive, so running it there also works; the token prompt is hidden and the script never prints the token.",
+      "extraNotes": "",
+      "metadata": {}
+    },
+    "hermes": {
+      "displayName": "Hermes Agent",
+      "installUser": "~/.hermes/skills",
+      "installProject": ".hermes/skills",
+      "invoke": "/github-token-utilities",
+      "ask": "Use the `clarify` tool for choices and confirmations.",
+      "shell": "Use the `terminal` tool.",
+      "userRun": "Ask the user to run the command in a separate terminal window, then tell you when it finishes.",
+      "extraNotes": "\n- To open a reference file, use `skill_view` with this skill's name and the path (e.g. `references/audit.md`).",
+      "metadata": {
+        "hermes": {
+          "tags": [
+            "github",
+            "security",
+            "tokens",
+            "devops"
+          ]
+        }
+      }
+    },
+    "grok": {
+      "displayName": "Grok Build",
+      "installUser": "~/.grok/skills",
+      "installProject": ".grok/skills",
+      "invoke": "/github-token-utilities",
+      "ask": "Use the `ask_user_question` tool for choices and confirmations.",
+      "shell": "Use the `bash` tool.",
+      "userRun": "Ask the user to run the command in a separate terminal window, then tell you when it finishes.",
+      "extraNotes": "",
+      "metadata": {}
+    }
+  }
+}
