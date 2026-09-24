@@ -6,7 +6,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.3.0] - 2026-09-24
 
 ### Added
 
@@ -184,7 +184,7 @@ All notable changes to this project are documented here. The format follows
 
 Initial release of `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `setup.mjs`.
 
-[Unreleased]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.2...HEAD
+[3.3.0]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.2...v3.3.0
 [3.2.2]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.1...v3.2.2
 [3.2.1]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.2.0

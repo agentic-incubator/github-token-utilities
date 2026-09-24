@@ -33,7 +33,7 @@ You need Node.js 22 or later, and the [GitHub CLI](https://cli.github.com/) sign
 `gh auth login`.
 
 ```bash
-V=3.2.2
+V=3.3.0
 npm install -g "https://github.com/agentic-incubator/github-token-utilities/releases/download/v$V/github-token-utilities-$V.tgz"
 
 audit-gh-tokens                                  # what do I have, and what's stale?
