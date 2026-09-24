@@ -24,7 +24,16 @@ node ~/audit.mjs --json --stale-days 60 # stricter staleness threshold
 node ~/audit.mjs --json --no-local      # repository secrets only
 node ~/audit.mjs --json --match '^DEPLOY_KEY$|_BOT_TOKEN$'  # also treat these secret names as tokens
 node ~/audit.mjs my-org --json --limit 200                  # cap the number of repos scanned
+node ~/audit.mjs --json --all-secrets --no-local            # every secret, all your orgs
 ```
+
+**All secrets.** When the user wants an inventory of *every* secret rather than just GitHub
+tokens (or asks why fewer secrets came back than expected), use `--all-secrets`. It drops
+the name filter and lists, for each non-archived repo, its Actions, Agents, Dependabot and
+Codespaces secrets plus each deployment environment's secrets; for each org, the org-level
+secrets; and the user's Codespaces secrets. With no owner it scans the user's account **and
+every org they belong to** (the default mode scans one owner only). It makes several `gh`
+calls per repo, so warn that it is slower and uses more API rate limit.
 
 The built-in name pattern catches the usual GitHub token names. If the user's workflows use
 their own names (for example `RELEASE_BOT`), add them with `--match <regex>`. For the shell
@@ -38,6 +47,11 @@ user lacks admin rights can't have their secrets listed — they appear in `remo
 
 - `remote.findings[]`: `repo`, `secretName`, `updatedAt`, `ageDays`, `status`
   (`STALE` ≥ stale-days, `AGING` ≥ ⅔ of it, `FRESH`).
+- With `--all-secrets`, `remote` also has `mode: "all-secrets"`, `owners[]` and
+  `incomplete[]` (`target`, `error`: listings that failed, e.g. org secrets without admin
+  rights), and each finding adds `scope` (`repository`, `environment`, `organization`,
+  `user`), `owner`, `environment`, `app` (`actions`, `agents`, `dependabot`, `codespaces`),
+  `tokenLike` and, for org secrets, `visibility`. `repo` is `null` for org/user secrets.
 - `local[]`: `file`, `valid`, `login`, `scopes`, `expiresAt`, `status`, and for the secrets
   file `secretsFile: true` plus `variable`
   (`EXPIRED`, `INVALID`, `EXPIRING_SOON` ≤7d, `NEARING_EXPIRATION` ≤30d, `VALID`,
@@ -57,6 +71,10 @@ Lead with what needs action, most urgent first, then a one-line all-clear for th
 4. `loosePermissions` — offer to run `chmod 600 <file>` (confirm first).
 5. Broad scopes on a local token (e.g. `delete_repo`, `admin:org`) — mention that a narrower
    token is safer; see `references/scopes.md`.
+
+For an `--all-secrets` run, group the table by owner/repo, call out `tokenLike` and `STALE`
+secrets first, and mention `noAccess`/`incomplete` so the user knows what wasn't seen. Only
+token-like repository Actions secrets can be rotated with `rotate`.
 
 Show a compact table rather than raw JSON. Never include token values — the report doesn't
 contain any, and you should not go looking for them.

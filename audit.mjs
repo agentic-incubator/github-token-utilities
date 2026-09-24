@@ -18,6 +18,9 @@ import {
 
 const SECRETS_FILE_KEYS = ['GITHUB_TOKEN', 'GITHUB_PERSONAL_ACCESS_TOKEN', 'GH_TOKEN'];
 
+// Every application `gh secret list --app` accepts, at repository and organization level.
+const SECRET_APPS = ['actions', 'agents', 'dependabot', 'codespaces'];
+
 const execFileAsync = promisify(execFile);
 
 const HELP = `
@@ -35,6 +38,10 @@ Options:
   --limit <n>            Maximum repositories to scan (default 1000)
   --stale-days <n>       Secrets older than this are STALE (default 90)
   --match <regex>        Extra secret-name pattern to treat as a token
+  --all-secrets          List every secret, not just token-like names: Actions, Agents,
+                         Dependabot and Codespaces secrets of each repo, its environments'
+                         secrets, org-level secrets, and your Codespaces user secrets.
+                         Without an owner, scans your account and every org you belong to
   --no-local             Skip checking local ~/*.ght files and the secrets file
   --secrets-file <path>  Shell secrets file to check (default: ~/.secrets.env,
                          ~/.secrets.ps1 on Windows PowerShell; see store-gh-token)
@@ -58,6 +65,7 @@ function parseArgs(argv) {
     else if (arg === '--match') opts.match = new RegExp(next(), 'i');
     else if (arg === '--no-local') opts.local = false;
     else if (arg === '--no-remote') opts.remote = false;
+    else if (arg === '--all-secrets') opts.allSecrets = true;
     else if (arg === '--secrets-file') opts.secretsFile = next();
     else if (arg === '--format') opts.format = next();
     else if (arg === '--json') opts.json = true;
@@ -68,6 +76,7 @@ function parseArgs(argv) {
   }
   if (!Number.isInteger(opts.limit) || opts.limit <= 0) throw new Error('--limit must be a positive integer');
   if (!Number.isInteger(opts.staleDays) || opts.staleDays <= 0) throw new Error('--stale-days must be a positive integer');
+  if (opts.allSecrets && !opts.remote) throw new Error('--all-secrets cannot be combined with --no-remote');
   if (opts.owner && !/^[A-Za-z0-9_.-]+$/.test(opts.owner)) throw new Error('owner must be a GitHub user or org name');
   return opts;
 }
@@ -91,6 +100,24 @@ function getRepositories(owner, limit) {
   const call = gh(args);
   const output = execFileSync(call.cmd, call.args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
   return JSON.parse(output).map((r) => r.nameWithOwner);
+}
+
+function ghLines(args) {
+  const call = gh(args);
+  const output = execFileSync(call.cmd, call.args, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
+  return output.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+}
+
+async function ghJson(args) {
+  const call = gh(args);
+  const { stdout } = await execFileAsync(call.cmd, call.args);
+  return JSON.parse(stdout);
+}
+
+async function ghLinesAsync(args) {
+  const call = gh(args);
+  const { stdout } = await execFileAsync(call.cmd, call.args);
+  return stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
 
 async function getRepositorySecrets(repo) {
@@ -133,6 +160,113 @@ async function auditRemote(opts, log) {
 
   findings.sort((a, b) => b.ageDays - a.ageDays);
   return { scanned: repositories.length, findings, noAccess: noAccess.sort() };
+}
+
+function firstLine(error) {
+  return String(error.stderr || error.message || error).trim().split('\n')[0];
+}
+
+// --all-secrets: every secret, at every level GitHub keeps them, for each owner.
+async function auditAllSecrets(opts, user, log) {
+  let owners;
+  if (opts.owner) {
+    owners = [opts.owner];
+  } else {
+    let orgs = [];
+    try {
+      orgs = ghLines(['api', 'user/orgs', '--paginate', '--jq', '.[].login']);
+    } catch (error) {
+      log(`⚠️  Could not list your organizations (${firstLine(error)}); scanning ${user} only\n`);
+    }
+    owners = [user, ...orgs.filter((o) => o !== user)];
+  }
+  log(`🏢 Owners: ${owners.join(', ')}\n`);
+
+  const findings = [];
+  const noAccess = [];
+  const incomplete = [];
+  const add = (secrets, where) => {
+    for (const secret of secrets) {
+      const days = daysSince(secret.updatedAt);
+      findings.push({
+        ...where,
+        secretName: secret.name,
+        updatedAt: secret.updatedAt,
+        ageDays: days,
+        tokenLike: isTokenSecret(secret.name, opts.match),
+        ...(secret.visibility ? { visibility: secret.visibility } : {}),
+        ...ageStatus(days, opts.staleDays),
+      });
+    }
+  };
+  // A 404 means the feature isn't available there (e.g. Codespaces not enabled for an org),
+  // so there are no secrets to miss; anything else (usually 403) is a gap worth reporting.
+  const attempt = async (target, args, where) => {
+    try {
+      add(await ghJson(args), where);
+    } catch (error) {
+      if (!/\b404\b/.test(firstLine(error))) incomplete.push({ target, error: firstLine(error) });
+    }
+  };
+
+  const repositories = [];
+  for (const owner of owners) {
+    const isOrg = owner !== user && (opts.owner ? ownerIsOrg(owner) : true);
+    if (isOrg) {
+      for (const app of SECRET_APPS) {
+        await attempt(`${owner} (${app})`, ['secret', 'list', '--org', owner, '--app', app, '--json', 'name,updatedAt,visibility'],
+          { scope: 'organization', owner, repo: null, environment: null, app });
+      }
+    } else if (owner === user) {
+      await attempt(`${owner} (codespaces user secrets)`, ['secret', 'list', '--user', '--json', 'name,updatedAt'],
+        { scope: 'user', owner, repo: null, environment: null, app: 'codespaces' });
+    }
+    try {
+      repositories.push(...getRepositories(owner, opts.limit));
+    } catch (error) {
+      incomplete.push({ target: `${owner} (repositories)`, error: firstLine(error) });
+    }
+  }
+  log(`✅ Found ${repositories.length} non-archived repositories\n`);
+  log('🔍 Scanning every secret (this makes several calls per repository)...\n');
+
+  await mapLimit(repositories, 8, async (repo) => {
+    const owner = repo.split('/')[0];
+    try {
+      add(await ghJson(['secret', 'list', '--repo', repo, '--app', 'actions', '--json', 'name,updatedAt']),
+        { scope: 'repository', owner, repo, environment: null, app: 'actions' });
+    } catch {
+      noAccess.push(repo);
+      return;
+    }
+    for (const app of SECRET_APPS.filter((a) => a !== 'actions')) {
+      await attempt(`${repo} (${app})`, ['secret', 'list', '--repo', repo, '--app', app, '--json', 'name,updatedAt'],
+        { scope: 'repository', owner, repo, environment: null, app });
+    }
+    let environments = [];
+    try {
+      environments = await ghLinesAsync(['api', `repos/${repo}/environments`, '--paginate', '--jq', '.environments[].name']);
+    } catch (error) {
+      // 404: the repo has no environments (e.g. private repos on plans without them).
+      if (!/\b404\b/.test(firstLine(error))) incomplete.push({ target: `${repo} (environments)`, error: firstLine(error) });
+    }
+    for (const environment of environments) {
+      await attempt(`${repo} (env ${environment})`, ['secret', 'list', '--repo', repo, '--env', environment, '--json', 'name,updatedAt'],
+        { scope: 'environment', owner, repo, environment, app: 'actions' });
+    }
+  });
+
+  findings.sort((a, b) => b.ageDays - a.ageDays);
+  incomplete.sort((a, b) => a.target.localeCompare(b.target));
+  return { mode: 'all-secrets', owners, scanned: repositories.length, findings, noAccess: noAccess.sort(), incomplete };
+}
+
+function ownerIsOrg(owner) {
+  try {
+    return ghLines(['api', `users/${owner}`, '--jq', '.type'])[0] === 'Organization';
+  } catch {
+    return false;
+  }
 }
 
 function describeLocal(label, filePath, token) {
@@ -201,6 +335,47 @@ function printRemote(remote, staleDays) {
   console.log('ℹ️  GitHub never reveals secret values, so a secret\'s real token expiry cannot be read — "LAST SET" is the best available signal.\n');
 }
 
+function secretLocation(f) {
+  return f.repo ?? f.owner;
+}
+
+function secretKind(f) {
+  if (f.scope === 'environment') return `env:${f.environment}`;
+  if (f.scope === 'organization') return `org/${f.app}`;
+  if (f.scope === 'user') return 'user/codespaces';
+  return f.app;
+}
+
+function printAllSecrets(remote, staleDays) {
+  console.log('═'.repeat(110));
+  console.log('🔍 ALL REPOSITORY, ORGANIZATION AND USER SECRETS\n');
+  if (remote.findings.length === 0) {
+    console.log('✅ No secrets found\n');
+  } else {
+    console.log('  ' + 'LOCATION'.padEnd(40) + 'SECRET NAME'.padEnd(30) + 'KIND'.padEnd(18) + 'STATUS'.padEnd(8) + 'LAST SET');
+    console.log('─'.repeat(110));
+    for (const f of remote.findings) {
+      const name = `${f.secretName}${f.tokenLike ? ' 🔑' : ''}`;
+      console.log(`${f.icon} ${secretLocation(f).padEnd(40)}${name.padEnd(30)}${secretKind(f).padEnd(18)}${f.status.padEnd(8)}${f.updatedAt.slice(0, 10)} (${f.ageDays}d ago)`);
+    }
+    console.log('');
+  }
+  const repos = new Set(remote.findings.map((f) => f.repo).filter(Boolean)).size;
+  console.log(`📊 ${remote.findings.length} secret(s) in ${repos} of ${remote.scanned} repositories across ${remote.owners.length} owner(s); 🔑 marks GitHub-token-like names\n`);
+  if (remote.noAccess.length > 0) {
+    console.log(`⚠️  Could not read secrets in ${remote.noAccess.length} repo(s) (needs admin access): ${remote.noAccess.slice(0, 10).join(', ')}${remote.noAccess.length > 10 ? ', …' : ''}\n`);
+  }
+  if (remote.incomplete.length > 0) {
+    console.log(`⚠️  ${remote.incomplete.length} listing(s) failed and are missing from the table (usually missing admin rights or token scopes): ${remote.incomplete.slice(0, 10).map((i) => i.target).join(', ')}${remote.incomplete.length > 10 ? ', …' : ''}\n`);
+  }
+  const stale = remote.findings.filter((f) => f.status === 'STALE');
+  if (stale.length > 0) {
+    const rotatable = stale.filter((f) => f.tokenLike && f.scope === 'repository' && f.app === 'actions').length;
+    console.log(`🔴 ${stale.length} secret(s) not set in ${staleDays}+ days${rotatable ? ` — ${rotatable} are token-like repository secrets; rotate with: rotate-gh-token <owner/repo> <SECRET>` : ''}\n`);
+  }
+  console.log('ℹ️  GitHub never reveals secret values; "LAST SET" is the only age signal available.\n');
+}
+
 function printLocal(local) {
   console.log('═'.repeat(100));
   console.log('🗝  LOCAL TOKENS (~/*.ght and your shell secrets file)\n');
@@ -242,7 +417,7 @@ async function main() {
     }
     report.owner = opts.owner || report.user;
     log(`👤 User: ${report.user}   📦 Owner: ${report.owner}\n`);
-    report.remote = await auditRemote(opts, log);
+    report.remote = opts.allSecrets ? await auditAllSecrets(opts, report.user, log) : await auditRemote(opts, log);
   }
 
   if (opts.local) {
@@ -255,7 +430,7 @@ async function main() {
   if (opts.json) {
     console.log(JSON.stringify(report, null, 2));
   } else {
-    if (report.remote) printRemote(report.remote, opts.staleDays);
+    if (report.remote) (opts.allSecrets ? printAllSecrets : printRemote)(report.remote, opts.staleDays);
     if (report.local) printLocal(report.local);
   }
   return 0;

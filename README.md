@@ -21,7 +21,7 @@ agent conversation.
 | Command | What it does | Guide |
 |---|---|---|
 | `gen-gh-token` | Create a fine-grained or classic token, verify it, and save it to `~/<name>.ght` | [Generate](docs/GENERATE.md) |
-| `audit-gh-tokens` | Find stale token secrets across your repos, and check local tokens for validity and expiry | [Audit](docs/AUDIT.md) |
+| `audit-gh-tokens` | Find stale token secrets across your repos (or, with `--all-secrets`, inventory every secret across your account and orgs), and check local tokens for validity and expiry | [Audit](docs/AUDIT.md) |
 | `rotate-gh-token` | Replace the token stored in a repository Actions secret | [Rotate](docs/ROTATE.md) |
 | `store-gh-token` | Keep a short-lived `GITHUB_TOKEN` in your shell's secrets file (bash, zsh, fish, csh, PowerShell and others) | [Store](docs/STORE.md) |
 | `revoke-gh-token` | Permanently revoke a token and remove local copies | [Revoke](docs/REVOKE.md) |

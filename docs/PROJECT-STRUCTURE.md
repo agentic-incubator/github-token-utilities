@@ -5,7 +5,7 @@
 ```
 github-token-utilities/
 ├── generator.mjs            # gen-gh-token: create, verify and save a PAT
-├── audit.mjs                # audit-gh-tokens: token-like repo secrets + local token health
+├── audit.mjs                # audit-gh-tokens: token-like (or, --all-secrets, all) secrets + local token health
 ├── rotate.mjs               # rotate-gh-token: replace a repo Actions secret
 ├── store.mjs                # store-gh-token: write a token into the shell secrets file
 ├── revoke.mjs               # revoke-gh-token: revoke a token and remove local copies

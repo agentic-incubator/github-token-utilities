@@ -2,13 +2,14 @@
 
 [README](../README.md) › [Documentation](../README.md#documentation) › Guides › Audit
 
-`audit-gh-tokens` finds token-like Actions secrets across your repositories and checks the tokens stored on your machine. It is read-only.
+`audit-gh-tokens` finds token-like Actions secrets across your repositories and checks the tokens stored on your machine. With `--all-secrets` it lists every secret instead, across your account and all your organizations. It is read-only.
 
 ```bash
 audit-gh-tokens                 # your repositories + local token files
 audit-gh-tokens my-org          # an organization's repositories
 audit-gh-tokens --no-remote     # local token files only
 audit-gh-tokens --json          # machine-readable report
+audit-gh-tokens --all-secrets   # every secret in your account and all your orgs
 ```
 
 **Repository secrets.** The audit lists every non-archived repository for the owner with
@@ -17,6 +18,25 @@ audit-gh-tokens --json          # machine-readable report
 like GitHub tokens (`GH_TOKEN`, `GH_PAT`, `PAT`, `*_TOKEN` with a `GH_`/`GIT_` prefix, and so
 on; extend the match with `--match <regex>`). Each one is marked `STALE` (last set ≥ 90 days
 ago, adjustable with `--stale-days`), `AGING` or `FRESH`.
+
+**All secrets.** By default the audit is about GitHub tokens: it scans one owner and keeps
+only token-like repository Actions secrets. `--all-secrets` makes it an inventory of every
+secret instead:
+
+- no name filter (token-like names are still flagged, as `tokenLike` / 🔑);
+- for each repository, its Actions, Agents, Dependabot and Codespaces secrets
+  (`gh secret list --app`) and the secrets of each deployment environment
+  (`gh secret list --env`);[^gh-secret-list]
+- for each organization, its organization-level secrets (`gh secret list --org`), and your
+  own Codespaces user secrets (`gh secret list --user`);
+- without an owner argument, your account **and every organization you belong to**
+  (`GET /user/orgs`[^user-orgs]); with one, just that owner.
+
+This makes several API calls per repository, so it is slower and uses more of your rate
+limit. Listings that fail (for example org secrets without org admin rights, or a token
+missing the `admin:org` or `codespace` scope) are reported as incomplete rather than silently
+dropped. A 404 (for example Codespaces not enabled for an organization, or a repository
+without environments) means there is nothing to list and is not reported.
 
 > [!NOTE]
 > GitHub never reveals the value of an Actions secret,[^secrets] so no tool can read the
@@ -43,6 +63,7 @@ Each token is marked `VALID`, `NEARING_EXPIRATION` (≤ 30 days), `EXPIRING_SOON
 
 [^gh-repo-list]: GitHub CLI manual, *gh repo list*: `[<owner>]`, `--no-archived`, `--limit`. <https://cli.github.com/manual/gh_repo_list>
 [^gh-secret-list]: GitHub CLI manual, *gh secret list*: JSON fields include `name` and `updatedAt`. <https://cli.github.com/manual/gh_secret_list>
+[^user-orgs]: GitHub Docs, *REST API endpoints for organizations*: "List organizations for the authenticated user". <https://docs.github.com/en/rest/orgs/orgs#list-organizations-for-the-authenticated-user>
 [^secrets]: GitHub Docs, *Secrets reference*: naming rules (letters, numbers, underscores; no leading digit; no `GITHUB_` prefix; case-insensitive) and that values are not readable. <https://docs.github.com/en/actions/reference/security/secrets>
 [^secrets-api]: GitHub Docs, *REST API endpoints for GitHub Actions secrets*: required access and the `repo` scope. <https://docs.github.com/en/rest/actions/secrets>
 [^oauth-scopes]: GitHub Docs, *Scopes for OAuth apps*: scope names and the `X-OAuth-Scopes` response header. <https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps>

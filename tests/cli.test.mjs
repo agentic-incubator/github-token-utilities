@@ -75,15 +75,37 @@ if (cmd === 'api -i') {
   process.stdout.write('HTTP/2.0 200 OK\\r\\nX-Oauth-Scopes: repo\\r\\nGithub-Authentication-Token-Expiration: ' + expiry + '\\r\\n\\r\\n{"login":"' + tokenLogin + '"}');
 } else if (cmd === 'api user') {
   process.stdout.write((process.env.FAKE_GH_LOGIN || 'octocat') + '\\n');
+} else if (cmd === 'api user/orgs') {
+  process.stdout.write('acme\\n');
+} else if (cmd === 'api users/acme') {
+  process.stdout.write('Organization\\n');
+} else if (cmd === 'api repos/acme/api/environments') {
+  process.stdout.write('prod\\n');
+} else if (cmd.startsWith('api repos/')) {
+  process.stderr.write('HTTP 404'); process.exit(1);
 } else if (cmd === 'auth token') {
   if (!process.env.FAKE_GH_STORED_TOKEN) { process.stderr.write('no token'); process.exit(1); }
   process.stdout.write(process.env.FAKE_GH_STORED_TOKEN + '\\n');
 } else if (cmd === 'repo view') {
   process.stdout.write('{"nameWithOwner":"acme/api"}');
 } else if (cmd === 'repo list') {
-  process.stdout.write(JSON.stringify([{ nameWithOwner: 'acme/api' }, { nameWithOwner: 'acme/locked' }]));
+  const owner = args[2] && !args[2].startsWith('-') ? args[2] : 'acme';
+  process.stdout.write(JSON.stringify(owner === 'acme' ? [{ nameWithOwner: 'acme/api' }, { nameWithOwner: 'acme/locked' }] : [{ nameWithOwner: owner + '/dotfiles' }]));
 } else if (cmd === 'secret list') {
   if (args.includes('acme/locked')) { process.stderr.write('HTTP 403'); process.exit(1); }
+  const app = args.includes('--app') ? args[args.indexOf('--app') + 1] : 'actions';
+  const recent = new Date(Date.now() - 86400000).toISOString();
+  if (args.includes('--env')) { process.stdout.write(JSON.stringify([{ name: 'DEPLOY_KEY', updatedAt: recent }])); process.exit(0); }
+  if (args.includes('--org')) {
+    if (app === 'codespaces') { process.stderr.write('HTTP 403'); process.exit(1); }
+    if (app === 'agents') { process.stderr.write('HTTP 404: Not Found'); process.exit(1); }
+    process.stdout.write(JSON.stringify(app === 'actions' ? [{ name: 'ORG_NPM_TOKEN', updatedAt: '2020-01-01T00:00:00Z', visibility: 'all', numSelectedRepos: 0 }] : []));
+    process.exit(0);
+  }
+  if (args.includes('--user')) { process.stdout.write(JSON.stringify([{ name: 'CS_SECRET', updatedAt: recent }])); process.exit(0); }
+  if (app === 'dependabot') { process.stdout.write(JSON.stringify(args.includes('acme/api') ? [{ name: 'REGISTRY_PASSWORD', updatedAt: recent }] : [])); process.exit(0); }
+  if (app !== 'actions') { process.stdout.write('[]'); process.exit(0); }
+  if (!args.includes('acme/api')) { process.stdout.write('[]'); process.exit(0); }
   process.stdout.write(JSON.stringify([
     { name: 'GH_TOKEN', updatedAt: '2020-01-01T00:00:00Z' },
     { name: 'NPM_TOKEN', updatedAt: '2020-01-01T00:00:00Z' },
@@ -191,6 +213,48 @@ test('audit --json reports stale token secrets, inaccessible repos and local tok
   assert.equal(report.local[0].status, 'VALID');
   if (os.platform() !== 'win32') assert.equal(report.local[0].loosePermissions, true);
   assert.ok(!result.stdout.includes(TOKEN));
+});
+
+test('audit --all-secrets lists every secret kind across the user and their orgs', () => {
+  const result = run('audit.mjs', ['--json', '--all-secrets', '--no-local']);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.remote.owners, ['octocat', 'acme']);
+  assert.equal(report.remote.scanned, 3);
+  const rows = report.remote.findings.map((f) => [f.scope, f.repo ?? f.owner, f.environment, f.app, f.secretName, f.tokenLike]).sort();
+  assert.deepEqual(rows, [
+    ['environment', 'acme/api', 'prod', 'actions', 'DEPLOY_KEY', false],
+    ['organization', 'acme', null, 'actions', 'ORG_NPM_TOKEN', false],
+    ['repository', 'acme/api', null, 'actions', 'GH_TOKEN', true],
+    ['repository', 'acme/api', null, 'actions', 'NPM_TOKEN', false],
+    ['repository', 'acme/api', null, 'dependabot', 'REGISTRY_PASSWORD', false],
+    ['user', 'octocat', null, 'codespaces', 'CS_SECRET', false],
+  ]);
+  assert.equal(report.remote.findings[0].status, 'STALE');
+  assert.deepEqual(report.remote.noAccess, ['acme/locked']);
+  // 403 is a gap; 404 (acme agents, octocat/dotfiles environments) means there is nothing to list.
+  assert.deepEqual(report.remote.incomplete.map((i) => i.target), ['acme (codespaces)']);
+  // Every non-archived repo of each owner, each app, and environment listings were requested.
+  const apps = ghCalls().filter((c) => c.args[0] === 'secret' && c.args.includes('acme/api') && !c.args.includes('--env')).map((c) => c.args[c.args.indexOf('--app') + 1]);
+  assert.deepEqual(apps.sort(), ['actions', 'agents', 'codespaces', 'dependabot']);
+});
+
+test('audit --all-secrets with an owner scans only that owner, and rejects --no-remote', () => {
+  const result = run('audit.mjs', ['acme', '--json', '--all-secrets', '--no-local']);
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.remote.owners, ['acme']);
+  assert.ok(!report.remote.findings.some((f) => f.scope === 'user'));
+  assert.ok(report.remote.findings.some((f) => f.scope === 'organization'));
+  assert.equal(run('audit.mjs', ['--all-secrets', '--no-remote']).status, 1);
+});
+
+test('audit --all-secrets prints a table without secret values', () => {
+  const result = run('audit.mjs', ['--all-secrets', '--no-local']);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /ALL REPOSITORY, ORGANIZATION AND USER SECRETS/);
+  assert.match(result.stdout, /env:prod/);
+  assert.match(result.stdout, /org\/actions/);
 });
 
 test('setup --dry-run copies nothing and edits no shell config', () => {

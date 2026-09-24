@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `audit-gh-tokens --all-secrets` lists every secret, not just token-like names: each
+  repository's Actions, Agents, Dependabot and Codespaces secrets, its environments' secrets,
+  organization-level secrets and your Codespaces user secrets. Without an owner it scans your
+  account and every organization you belong to. Findings carry `scope`, `app`,
+  `environment` and `tokenLike`; listings that fail are reported under `incomplete`.
+
 ## [3.2.2] - 2026-09-24
 
 ### Changed
@@ -174,6 +184,7 @@ All notable changes to this project are documented here. The format follows
 
 Initial release of `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `setup.mjs`.
 
+[Unreleased]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.2...HEAD
 [3.2.2]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.1...v3.2.2
 [3.2.1]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.2.0

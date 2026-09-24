@@ -17,7 +17,7 @@ that manage GitHub personal access tokens (PATs):
 
 | Action | Script (after setup) | What it does |
 |---|---|---|
-| **audit** | `node ~/audit.mjs` | Finds token-like Actions secrets across repos, shows when each was last set, and checks local `~/*.ght` token files for validity, expiry and permissions |
+| **audit** | `node ~/audit.mjs` | Finds token-like Actions secrets across repos (every secret, org and user secrets included, with `--all-secrets`), shows when each was last set, and checks local `~/*.ght` token files for validity, expiry and permissions |
 | **rotate** | `node ~/rotate.mjs` | Replaces a repo's Actions secret with a new token |
 | **generate** | `node ~/generator.mjs` | Opens a prefilled GitHub "new token" page, takes the pasted token, verifies it, saves it to `~/<name>.ght` (mode 600) |
 | **revoke** | `node ~/revoke.mjs` | Permanently revokes a token (`--from NAME`, `--stored`, `--previous`), confirms GitHub rejects it, and removes local copies |
