@@ -149,7 +149,8 @@ test('setup --dry-run copies nothing and edits no shell config', () => {
   const result = run('setup.mjs', ['--dry-run']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /would copy gh-token-lib\.mjs/);
-  assert.deepEqual(fs.readdirSync(home), []);
+  // On Windows, asking PowerShell for $PROFILE makes PowerShell itself create AppData.
+  assert.deepEqual(fs.readdirSync(home).filter((f) => f !== 'AppData'), []);
 });
 
 test('setup installs scripts that run from the home directory', () => {

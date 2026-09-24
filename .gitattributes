@@ -1,0 +1,3 @@
+# Keep LF everywhere, including Windows checkouts: SKILL.md frontmatter parsers, shell
+# scripts and the skill build all expect LF.
+* text=auto eol=lf

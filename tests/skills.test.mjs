@@ -63,7 +63,7 @@ test('skills/dist matches what skills/core renders (run npm run build:skills if 
   for (const hostId of Object.keys(config.hosts)) {
     for (const [rel, content] of renderHost(config, hostId)) {
       const onDisk = path.join(root, 'skills', 'dist', hostId, config.skill.name, rel);
-      assert.equal(fs.readFileSync(onDisk, 'utf-8'), content, `${hostId}/${rel} is stale`);
+      assert.equal(fs.readFileSync(onDisk, 'utf-8').replace(/\r\n/g, '\n'), content, `${hostId}/${rel} is stale`);
     }
   }
 });

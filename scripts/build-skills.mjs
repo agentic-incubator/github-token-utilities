@@ -67,6 +67,11 @@ function renderFrontmatter(skill, host) {
   ].join('\n');
 }
 
+// Tolerate CRLF checkouts (e.g. Windows with core.autocrlf) by rendering from LF text.
+function readText(file) {
+  return fs.readFileSync(file, 'utf-8').replace(/\r\n/g, '\n');
+}
+
 function renderText(text, skill, host, frontmatter) {
   const replacements = {
     FRONTMATTER: frontmatter,
@@ -93,10 +98,10 @@ export function renderHost(config, hostId) {
   const host = config.hosts[hostId];
   const frontmatter = renderFrontmatter(skill, host);
   const files = new Map();
-  files.set('SKILL.md', renderText(fs.readFileSync(path.join(CORE_DIR, 'SKILL.md.tmpl'), 'utf-8'), skill, host, frontmatter));
+  files.set('SKILL.md', renderText(readText(path.join(CORE_DIR, 'SKILL.md.tmpl')), skill, host, frontmatter));
   const refDir = path.join(CORE_DIR, 'references');
   for (const file of fs.readdirSync(refDir).sort()) {
-    files.set(`references/${file}`, renderText(fs.readFileSync(path.join(refDir, file), 'utf-8'), skill, host, frontmatter));
+    files.set(`references/${file}`, renderText(readText(path.join(refDir, file)), skill, host, frontmatter));
   }
   return files;
 }
@@ -162,7 +167,7 @@ function readDir(dir) {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(path.join(current, entry.name), rel);
-      else files.set(rel, fs.readFileSync(path.join(current, entry.name), 'utf-8'));
+      else files.set(rel, readText(path.join(current, entry.name)));
     }
   };
   walk(dir, '');
