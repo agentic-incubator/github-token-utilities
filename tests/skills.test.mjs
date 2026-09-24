@@ -67,3 +67,19 @@ test('skills/dist matches what skills/core renders (run npm run build:skills if 
     }
   }
 });
+
+test('the skill mentions every flag each script accepts (keeps the skill in step with the tools)', async () => {
+  const { spawnSync } = await import('child_process');
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [fs.readFileSync(path.join(dir, e.name), 'utf-8')]));
+  const skillText = walk(path.join(root, 'skills', 'core')).join('\n');
+  const missing = [];
+  for (const script of ['generator', 'audit', 'rotate', 'store', 'revoke', 'setup']) {
+    const help = spawnSync(process.execPath, [path.join(root, `${script}.mjs`), '--help'], { encoding: 'utf-8' }).stdout;
+    for (const flag of new Set(help.match(/--[a-z][a-z-]+/g))) {
+      if (!skillText.includes(flag)) missing.push(`${script}.mjs ${flag}`);
+    }
+  }
+  assert.deepEqual(missing, [], 'document these flags in skills/core/references');
+});

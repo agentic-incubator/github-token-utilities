@@ -13,6 +13,9 @@ All notable changes to this project are documented here. The format follows
 - The external link check retries with backoff, reports the underlying network error, and
   treats "no response" from known flaky hosts (currently `www.gnu.org`, which intermittently
   refuses GitHub's runners) as a warning. HTTP error statuses still fail.
+- The agent skill now documents every command flag, including `audit --match`, `--limit` and
+  `--no-local`, and `store --key`, `--alias`, `--no-alias`, `--no-clipboard`, `--no-backup`
+  and `--no-verify`.
 
 ## [3.2.1] - 2026-09-24
 

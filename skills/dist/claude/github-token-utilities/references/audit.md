@@ -21,7 +21,15 @@ node ~/audit.mjs --json                 # your own repos + local tokens
 node ~/audit.mjs my-org --json          # an organization's repos
 node ~/audit.mjs --json --no-remote     # local token files only (fast)
 node ~/audit.mjs --json --stale-days 60 # stricter staleness threshold
+node ~/audit.mjs --json --no-local      # repository secrets only
+node ~/audit.mjs --json --match '^DEPLOY_KEY$|_BOT_TOKEN$'  # also treat these secret names as tokens
+node ~/audit.mjs my-org --json --limit 200                  # cap the number of repos scanned
 ```
+
+The built-in name pattern catches the usual GitHub token names. If the user's workflows use
+their own names (for example `RELEASE_BOT`), add them with `--match <regex>`. For the shell
+secrets file, `--secrets-file PATH` and `--format sh|fish|csh|powershell` point at a
+non-default file.
 
 Scanning hundreds of repos takes a minute or two; say so before starting. Repos where the
 user lacks admin rights can't have their secrets listed — they appear in `remote.noAccess`.

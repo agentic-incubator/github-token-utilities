@@ -88,6 +88,23 @@ node ~/audit.mjs --no-remote --json
 The `"secretsFile": true` entry should be `VALID`, with the expected `login` and an
 `expiresAt` about 7 days out.
 
+## Options worth knowing
+
+- **Different variable names:** `--key NAME` sets which variable holds the value (default
+  `GITHUB_TOKEN`). `--alias NAME`, which can be repeated, sets which variables reference it
+  (default `GITHUB_PERSONAL_ACCESS_TOKEN`). `--no-alias` writes no references. Use these when
+  the user's tools expect other names, such as `GH_TOKEN`.
+- **No clipboard** (SSH session, headless Linux): `--no-clipboard` asks the user to paste into
+  a hidden prompt instead. The script also falls back to that on its own when no clipboard
+  tool is available.
+- **Non-default file:** `--file PATH` and `--format sh|fish|csh|powershell`.
+- **`--no-backup`** skips the `<file>.bak` copy. Recommend it only if the user doesn't want a
+  second file holding the old token; `--revoke-previous` deletes that backup anyway once the
+  old token is revoked.
+- **`--no-verify`** skips checking the token with GitHub, and with it the expiry limit and
+  the account check. Don't suggest it; it exists for offline edge cases, and `--generate` and
+  `--revoke-previous` refuse it.
+
 ## 5. Finish
 
 - New terminals pick up the token. For the current one, have the user run
