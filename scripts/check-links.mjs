@@ -22,6 +22,11 @@ const SKIP = [
   /^https:\/\/api\.github\.com\/?$/, // API root, used as a base URL
 ];
 
+// Hosts known to intermittently refuse connections from cloud CI runners (the pages load fine
+// from elsewhere). For these, a failure with NO HTTP response is a warning, not an error; an
+// HTTP error status (404, 410, …) from them still fails the check.
+const FLAKY_HOSTS = ['www.gnu.org'];
+
 function sourceFiles() {
   const files = ['README.md', 'package.json'];
   const walk = (dir, filter) => {
@@ -76,13 +81,21 @@ function fragmentPresent(html, fragment) {
     || html.includes(`#${f}"`);
 }
 
+const BACKOFF_MS = [5000, 15000];
+
+function describeError(error) {
+  if (error.name === 'AbortError') return 'timeout';
+  const cause = error.cause;
+  return cause ? `${error.message}: ${cause.code || cause.message}` : error.message;
+}
+
 async function check(url) {
   const [base, fragment] = url.split('#');
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const response = await fetchWithTimeout(base, 'GET');
       if (response.status === 429 && attempt < 3) {
-        await new Promise((r) => setTimeout(r, 5000 * attempt));
+        await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt - 1]));
         continue;
       }
       if (response.status >= 400) return { url, ok: false, detail: `HTTP ${response.status}` };
@@ -92,7 +105,11 @@ async function check(url) {
       }
       return { url, ok: true, detail: `HTTP ${response.status}` };
     } catch (error) {
-      if (attempt === 3) return { url, ok: false, detail: error.name === 'AbortError' ? 'timeout' : error.message };
+      if (attempt === 3) {
+        const flaky = FLAKY_HOSTS.includes(new URL(base).hostname);
+        return { url, ok: flaky, warning: flaky, detail: `no response (${describeError(error)})` };
+      }
+      await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt - 1]));
     }
   }
   return { url, ok: false, detail: 'rate limited' };
@@ -115,9 +132,11 @@ async function main() {
   }));
 
   const failed = results.filter((r) => !r.ok).sort((a, b) => a.url.localeCompare(b.url));
-  if (VERBOSE) for (const r of results.filter((x) => x.ok)) console.log(`✅ ${r.url}`);
+  if (VERBOSE) for (const r of results.filter((x) => x.ok && !x.warning)) console.log(`✅ ${r.url}`);
+  for (const r of results.filter((x) => x.warning)) console.log(`⚠️  ${r.url}\n   ${r.detail} — known flaky host, not counted as broken`);
   for (const r of failed) console.log(`❌ ${r.url}\n   ${r.detail} — in ${[...where.get(r.url)].join(', ')}`);
-  console.log(`\n${results.length - failed.length}/${results.length} external links OK`);
+  const warned = results.filter((r) => r.warning).length;
+  console.log(`\n${results.length - failed.length}/${results.length} external links OK${warned ? ` (${warned} unreachable on a known flaky host)` : ''}`);
   process.exitCode = failed.length ? 1 : 0;
 }
 

@@ -42,6 +42,9 @@ Two checks keep the documentation's links working:
   weekly, on documentation changes pushed to `main`, and on demand, in
   [`links.yml`](../.github/workflows/links.yml). Pages behind a sign-in
   (`github.com/settings/…`) can't be checked anonymously and are skipped.
+  A few hosts (currently `www.gnu.org`) intermittently refuse connections from cloud CI
+  runners. For those, getting no response at all is reported as a warning after retries with
+  backoff. An HTTP error status from them still fails the check.
 
 ## Releasing
 
