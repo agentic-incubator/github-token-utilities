@@ -12,6 +12,70 @@ export function gh(args) {
   return shim ? { cmd: process.execPath, args: [shim, ...args] } : { cmd: 'gh', args };
 }
 
+// Every classic scope GitHub offers (the generator's "default" set).
+// https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps
+export const DEFAULT_SCOPES = [
+  // Repositories
+  'repo',
+  'repo:status',
+  'repo_deployment',
+  'public_repo',
+  'repo:invite',
+  // Workflows & Automation
+  'workflow',
+  'security_events',
+  // Package Management
+  'write:packages',
+  'read:packages',
+  'delete:packages',
+  // Organization & Team Management
+  'admin:org',
+  'write:org',
+  'read:org',
+  'manage_runners:org',
+  // Keys & Security
+  'admin:public_key',
+  'write:public_key',
+  'read:public_key',
+  'admin:gpg_key',
+  'write:gpg_key',
+  'read:gpg_key',
+  'admin:ssh_signing_key',
+  'write:ssh_signing_key',
+  'read:ssh_signing_key',
+  // Webhooks & Hooks
+  'admin:repo_hook',
+  'write:repo_hook',
+  'read:repo_hook',
+  'admin:org_hook',
+  // User & Account
+  'gist',
+  'notifications',
+  'user',
+  'read:user',
+  'user:email',
+  'user:follow',
+  'delete_repo',
+  // Discussions & Collaboration
+  'write:discussion',
+  'read:discussion',
+  // Enterprise
+  'admin:enterprise',
+  'manage_runners:enterprise',
+  'read:enterprise',
+  // Auditing & Logging
+  'audit_log',
+  'read:audit_log',
+  // Advanced Features
+  'codespace',
+  'copilot',
+  'manage_billing:copilot',
+  'write:network_configurations',
+  'read:network_configurations',
+  'project',
+  'read:project',
+];
+
 export const TOKEN_TYPES = ['classic', 'fine-grained'];
 
 // Fine-grained PAT names are limited to 40 characters.
@@ -376,4 +440,71 @@ export function restrictToOwner(file, { platform = process.platform, run = execF
   } catch {
     return false;
   }
+}
+
+// ── Current gh account ───────────────────────────────────────────────────────
+
+// The login gh is signed in as. Tries the stored gh login first (ignoring GH_TOKEN and
+// GITHUB_TOKEN, which may hold the very token being replaced), then the environment token.
+// Returns { login, source: 'gh login' | 'GH_TOKEN/GITHUB_TOKEN' } or null.
+export function currentGhLogin(run = execFileSync) {
+  const attempts = [
+    { source: 'gh login', env: (() => { const e = { ...process.env }; delete e.GH_TOKEN; delete e.GITHUB_TOKEN; return e; })() },
+    { source: 'GH_TOKEN/GITHUB_TOKEN', env: process.env },
+  ];
+  for (const { source, env } of attempts) {
+    try {
+      const call = gh(['api', 'user', '--jq', '.login']);
+      const login = run(call.cmd, call.args, { env, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      if (login) return { login, source };
+    } catch {
+      // Try the next credential source.
+    }
+  }
+  return null;
+}
+
+// ── Clipboard ────────────────────────────────────────────────────────────────
+// macOS: pbpaste/pbcopy. Windows: PowerShell Get-/Set-Clipboard. Linux: wl-paste/wl-copy
+// (Wayland), xclip or xsel (X11).
+// https://learn.microsoft.com/powershell/module/microsoft.powershell.management/get-clipboard
+
+export function clipboardCommands(platform = process.platform, env = process.env) {
+  if (platform === 'darwin') return [{ read: ['pbpaste', []], clear: ['pbcopy', []] }];
+  if (platform === 'win32') {
+    return ['pwsh', 'powershell'].map((exe) => ({
+      read: [exe, ['-NoProfile', '-NonInteractive', '-Command', 'Get-Clipboard -Raw']],
+      // Set-Clipboard rejects an empty value, so overwrite with a single space.
+      clear: [exe, ['-NoProfile', '-NonInteractive', '-Command', "Set-Clipboard -Value ' '"]],
+    }));
+  }
+  const commands = [];
+  if (env.WAYLAND_DISPLAY) commands.push({ read: ['wl-paste', ['--no-newline']], clear: ['wl-copy', ['--clear']] });
+  commands.push({ read: ['xclip', ['-selection', 'clipboard', '-o']], clear: ['xclip', ['-selection', 'clipboard', '-i']] });
+  commands.push({ read: ['xsel', ['--clipboard', '--output']], clear: ['xsel', ['--clipboard', '--clear']] });
+  return commands;
+}
+
+// Returns { text, clear } where clear() empties the clipboard, or null when no clipboard
+// tool works (headless Linux, SSH sessions).
+export function readClipboard({ platform = process.platform, env = process.env, run = execFileSync } = {}) {
+  for (const { read, clear } of clipboardCommands(platform, env)) {
+    try {
+      const text = run(read[0], read[1], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+      return {
+        text: text.trim(),
+        clear: () => {
+          try {
+            run(clear[0], clear[1], { input: '', stdio: ['pipe', 'ignore', 'ignore'] });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      };
+    } catch {
+      // Tool missing or no display; try the next one.
+    }
+  }
+  return null;
 }

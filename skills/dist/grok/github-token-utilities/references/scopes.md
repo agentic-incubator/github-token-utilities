@@ -50,7 +50,7 @@ then need to approve it before it works.
 Avoid these unless the user explicitly needs them and understands them: `delete_repo`,
 `admin:org`, `admin:enterprise`, `admin:repo_hook`, `admin:org_hook`, `admin:public_key`,
 `admin:gpg_key`, `admin:ssh_signing_key`, `user`, `audit_log`, `delete:packages`. The generator
-warns when any of these are selected. Its `default` set includes all 51 scopes, which is
+warns when any of these are selected. Its `default` set includes all 48 scopes, which is
 almost never right; steer users away from it.
 
 ## Expiration

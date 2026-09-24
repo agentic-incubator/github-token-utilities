@@ -31,6 +31,7 @@ source that backs it. Verified on **2026-09-24**.
 | G14 | GitHub recommends fine-grained over classic tokens | Generator interactive default; skill guidance | Documented | [Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) |
 | G15 | Organizations can restrict token types and set maximum lifetimes; fine-grained tokens may need approval | Troubleshooting guidance | Documented | [Setting a PAT policy for your organization](https://docs.github.com/en/organizations/managing-programmatic-access-to-your-organization/setting-a-personal-access-token-policy-for-your-organization); [Changelog 2024-10-18](https://github.blog/changelog/2024-10-18-new-pat-rotation-policies-preview-and-optional-expiration-for-fine-grained-pats/) |
 | G16 | You can't revoke your own PAT through the API. `POST /credentials/revoke` is unauthenticated and meant for credentials you don't own | `rotate.mjs` "revoke the old token" step | Documented | [REST: revocation](https://docs.github.com/en/rest/credentials/revoke) |
+| G17 | OAuth tokens (such as `gh`'s own `gho_` login token) have no scheduled expiry; they're revoked after a year unused. GitHub App user tokens expire after 8 hours | Design choice: `--generate` uses a PAT, not `gh auth token` | Documented | [Token expiration and revocation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation) |
 
 ## GitHub CLI (`gh`)
 
@@ -42,6 +43,7 @@ source that backs it. Verified on **2026-09-24**.
 | C4 | `gh repo list [<owner>] --no-archived --limit N --json nameWithOwner` (there is no `--owner` flag) | `audit.mjs` | Documented | [gh repo list](https://cli.github.com/manual/gh_repo_list) |
 | C5 | `gh api -i` prints response headers before the body | `verifyToken` | Documented | [gh api](https://cli.github.com/manual/gh_api) (`--include`) |
 | C6 | `gh auth login` sets up the stored credentials | Requirements; skill pre-flight | Documented | [gh auth login](https://cli.github.com/manual/gh_auth_login) |
+| C7 | `gh api user` reports the signed-in account; with `GH_TOKEN`/`GITHUB_TOKEN` removed from the environment, `gh` falls back to its stored login | `currentGhLogin` | Documented, Tested here | [gh help environment](https://cli.github.com/manual/gh_help_environment); verified locally with an invalid `GITHUB_TOKEN` exported |
 
 ## Shells and operating systems
 
@@ -56,6 +58,7 @@ source that backs it. Verified on **2026-09-24**.
 | O7 | `$PROFILE.CurrentUserAllHosts` gives the profile path, which differs between PowerShell 7 and 5.1 and follows redirected Documents folders | `getPowerShellProfile` (setup and store) | Documented | [about_Profiles](https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_profiles) |
 | O8 | `icacls FILE /inheritance:r /grant:r USER:F` leaves only the owner's access | `restrictToOwner` | Documented | [icacls](https://learn.microsoft.com/windows-server/administration/windows-commands/icacls) |
 | O9 | Node.js 20 reached end-of-life on 2026-04-30; 22 is supported until 2027-04-30 and 24 until 2028-04-30 | `package.json` `engines`, CI matrix | Documented | [nodejs/Release schedule](https://github.com/nodejs/Release#release-schedule) |
+| O10 | Clipboard access: `pbpaste`/`pbcopy` (macOS), `Get-Clipboard`/`Set-Clipboard` (PowerShell), `wl-paste`/`wl-copy` (Wayland), `xclip`/`xsel` (X11) | `clipboardCommands`, `readClipboard` | Documented, Tested here | [Get-Clipboard](https://learn.microsoft.com/powershell/module/microsoft.powershell.management/get-clipboard); [Set-Clipboard](https://learn.microsoft.com/powershell/module/microsoft.powershell.management/set-clipboard); `tests/lib.test.mjs` covers the tool order and fallbacks |
 
 ## Agent Skills format and hosts
 

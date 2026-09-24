@@ -1,7 +1,7 @@
 # GitHub Token Utilities
 
 [![CI](https://github.com/agentic-incubator/github-token-utilities/actions/workflows/ci.yml/badge.svg)](https://github.com/agentic-incubator/github-token-utilities/actions/workflows/ci.yml)
-![version 3.0.0](https://img.shields.io/badge/version-3.0.0-blue)
+![version 3.1.0](https://img.shields.io/badge/version-3.1.0-blue)
 ![node >= 22](https://img.shields.io/badge/node-%E2%89%A5%2022-339933)
 [![license MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -148,7 +148,7 @@ What happens:
 | `--expiration <days>` | both | Fine-grained: 1–366, prefilled on GitHub.[^pat-docs] Classic: you set it on the page |
 | `--permissions <list>` | fine-grained | `name=read\|write\|admin`, comma-separated. Names are checked against GitHub's documented list[^pat-docs] |
 | `--owner <user\|org>` | fine-grained | Resource owner (`target_name`); default is you |
-| `--scopes <list>` | classic | Comma-separated scopes,[^oauth-scopes] or `default` (all 51) or `none` |
+| `--scopes <list>` | classic | Comma-separated scopes,[^oauth-scopes] or `default` (all 48 in the default set) or `none` |
 | `--yes` | both | Skip the confirmation |
 | `--force` | both | Overwrite an existing `~/<name>.ght` |
 | `--no-open` | both | Print the URL instead of opening a browser (SSH/headless) |
@@ -156,7 +156,7 @@ What happens:
 | `--token-stdin` | both | Read the token from stdin; requires `--type`, `--name`, `--expiration` and `--yes` |
 
 > [!CAUTION]
-> The classic `default` set grants all 51 scopes, including `delete_repo`, `admin:org` and
+> The classic `default` set grants all 48 scopes it lists, including `delete_repo`, `admin:org` and
 > `admin:enterprise`. A leaked token with those scopes can delete repositories and
 > reconfigure organizations. GitHub recommends fine-grained tokens whenever they can do the
 > job.[^pat-docs] Where you need classic, request only the scopes the task requires. The
@@ -250,8 +250,35 @@ in `~/<name>.ght` (`--existing`). It then writes the token to the secret with
 
 ### Store a terminal token
 
-For a powerful token in your terminal that doesn't live long: generate a short-lived token,
-then store it in the secrets file your shell loads at startup.
+For a powerful token in your terminal that doesn't live long, run one command. It creates a
+token for the account `gh` is signed in as and stores it in the secrets file your shell loads
+at startup:
+
+```bash
+store-gh-token --generate --expiration 7
+```
+
+1. It shows the account `gh` is signed in as. It asks the stored `gh` login first, because the
+   `GITHUB_TOKEN` your shell exports may be the old token being replaced.
+2. It opens GitHub's new-token page with all 48 default classic scopes and a dated note
+   prefilled. Narrow it with `--scopes repo,workflow,…`.
+3. You set **Expiration** (GitHub can't prefill it for classic tokens), click **Generate
+   token** and copy it, then press Enter.
+4. It reads the token from the clipboard and clears the clipboard, so you never paste or see
+   it.[^clipboard] Where no clipboard is available (SSH, headless Linux) it falls back to a
+   hidden prompt; `--no-clipboard` forces that.
+5. It verifies the token and **refuses it if it belongs to a different account** than `gh`
+   (for example, a browser signed in elsewhere) or outlives `--max-days`.
+6. It adds or replaces the variables as described below.
+
+> [!IMPORTANT]
+> "Current user" means the account `gh` is signed in as. GitHub has no API that creates a
+> personal access token,[^pat-docs] so that one click on GitHub's page can't be skipped. Every
+> other step is automated. The alternative, reusing `gh`'s own OAuth token, was rejected
+> deliberately: it never expires on a schedule (it's only revoked after a year of
+> non-use)[^token-expiry], and it is `gh`'s own login credential.
+
+If you also want a copy in `~/<name>.ght`, use the two-step form:
 
 ```bash
 gen-gh-token --type classic --name terminal --scopes default --expiration 7
@@ -305,7 +332,7 @@ How it edits the file:
 
 ## Compatibility
 
-Version **3.0.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
+Version **3.1.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 | Component | Supported | Verified with |
 |---|---|---|
@@ -471,6 +498,8 @@ only observed in practice, or undocumented. The sources cited above:
 [^ps-scripts]: Microsoft Learn, *about_Scripts*: scripts use the `.ps1` extension, dot sourcing runs them in the current scope, and Windows' default execution policy blocks scripts. <https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_scripts>
 [^icacls]: Microsoft Learn, *icacls* (`/inheritance:r`, `/grant:r`). <https://learn.microsoft.com/windows-server/administration/windows-commands/icacls>
 [^dependabot]: GitHub Docs, *Dependabot options reference* (`package-ecosystem`, `schedule.interval`, `groups`). <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference>
+[^clipboard]: macOS `pbpaste`/`pbcopy`; Windows PowerShell `Get-Clipboard`/`Set-Clipboard` <https://learn.microsoft.com/powershell/module/microsoft.powershell.management/get-clipboard>; Linux `wl-paste` (Wayland), `xclip` or `xsel` (X11).
+[^token-expiry]: GitHub Docs, *Token expiration and revocation*: tokens unused for a year are revoked; GitHub App user tokens expire after 8 hours. <https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/token-expiration-and-revocation>
 [^agentskills-spec]: Agent Skills specification: `SKILL.md` frontmatter fields and limits, directory layout. <https://agentskills.io/specification>
 [^claude-skills]: Claude Code Docs, *Skills*. <https://code.claude.com/docs/en/skills>
 [^codex-skills]: OpenAI Codex, *Build skills* (`~/.agents/skills`, `$skill-name`) <https://developers.openai.com/codex/skills>. Deprecated `$CODEX_HOME/skills` path: `codex-rs/ext/skills/src/host_roots.rs` in <https://github.com/openai/codex>

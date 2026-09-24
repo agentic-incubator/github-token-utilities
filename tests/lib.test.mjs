@@ -239,3 +239,40 @@ test('restrictToOwner uses icacls on Windows', () => {
   assert.equal(ok, true);
   assert.deepEqual(seen, ['icacls', 'C:\\Users\\alice\\.secrets.ps1', '/inheritance:r', '/grant:r', 'alice:F']);
 });
+
+import { clipboardCommands, currentGhLogin, readClipboard } from '../gh-token-lib.mjs';
+
+test('clipboardCommands picks the right tools per platform', () => {
+  assert.equal(clipboardCommands('darwin')[0].read[0], 'pbpaste');
+  assert.deepEqual(clipboardCommands('win32').map((c) => c.read[0]), ['pwsh', 'powershell']);
+  assert.deepEqual(clipboardCommands('linux', { WAYLAND_DISPLAY: 'wayland-0' }).map((c) => c.read[0]), ['wl-paste', 'xclip', 'xsel']);
+  assert.deepEqual(clipboardCommands('linux', {}).map((c) => c.read[0]), ['xclip', 'xsel']);
+});
+
+test('readClipboard falls back through tools and can clear', () => {
+  const calls = [];
+  const run = (cmd, args) => {
+    calls.push([cmd, ...args].join(' '));
+    if (cmd === 'xclip') throw new Error('no display');
+    if (args.includes('--output')) return 'ghp_fromclipboard\n';
+    return '';
+  };
+  const clip = readClipboard({ platform: 'linux', env: {}, run });
+  assert.equal(clip.text, 'ghp_fromclipboard');
+  assert.equal(clip.clear(), true);
+  assert.deepEqual(calls, ['xclip -selection clipboard -o', 'xsel --clipboard --output', 'xsel --clipboard --clear']);
+  assert.equal(readClipboard({ platform: 'linux', env: {}, run: () => { throw new Error('none'); } }), null);
+});
+
+test('currentGhLogin prefers the stored gh login over GITHUB_TOKEN, then falls back', () => {
+  process.env.GITHUB_TOKEN = 'ghp_stale';
+  const seen = [];
+  const storedOk = (cmd, args, { env }) => { seen.push(env.GITHUB_TOKEN ?? null); return 'pacphi\n'; };
+  assert.deepEqual(currentGhLogin(storedOk), { login: 'pacphi', source: 'gh login' });
+  assert.deepEqual(seen, [null]);
+
+  const storedFails = (cmd, args, { env }) => { if (!env.GITHUB_TOKEN) throw new Error('not logged in'); return 'envuser\n'; };
+  assert.deepEqual(currentGhLogin(storedFails), { login: 'envuser', source: 'GH_TOKEN/GITHUB_TOKEN' });
+  delete process.env.GITHUB_TOKEN;
+  assert.equal(currentGhLogin(() => { throw new Error('x'); }), null);
+});

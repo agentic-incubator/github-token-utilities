@@ -28,9 +28,10 @@ fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ args, stdin, ghToken
 if (cmd === 'api -i') {
   if ((process.env.GH_TOKEN || '').includes('REVOKED')) { process.stderr.write('HTTP 401: Bad credentials'); process.exit(1); }
   const expiry = process.env.FAKE_GH_EXPIRY || '2099-01-01 00:00:00 UTC';
-  process.stdout.write('HTTP/2.0 200 OK\\r\\nX-Oauth-Scopes: repo\\r\\nGithub-Authentication-Token-Expiration: ' + expiry + '\\r\\n\\r\\n{"login":"octocat"}');
+  const tokenLogin = process.env.FAKE_GH_TOKEN_LOGIN || 'octocat';
+  process.stdout.write('HTTP/2.0 200 OK\\r\\nX-Oauth-Scopes: repo\\r\\nGithub-Authentication-Token-Expiration: ' + expiry + '\\r\\n\\r\\n{"login":"' + tokenLogin + '"}');
 } else if (cmd === 'api user') {
-  process.stdout.write('octocat\\n');
+  process.stdout.write((process.env.FAKE_GH_LOGIN || 'octocat') + '\\n');
 } else if (cmd === 'repo view') {
   process.stdout.write('{"nameWithOwner":"acme/api"}');
 } else if (cmd === 'repo list') {
@@ -270,4 +271,39 @@ test('store writes fish syntax for --format fish', () => {
   assert.equal(result.status, 0, result.stdout);
   assert.equal(fs.readFileSync(path.join(home, '.config', 'fish', 'conf.d', 'secrets.fish'), 'utf-8'),
     `set -gx GITHUB_TOKEN ${TOKEN}\nset -gx GITHUB_PERSONAL_ACCESS_TOKEN $GITHUB_TOKEN\n`);
+});
+
+// ── store-gh-token --generate ────────────────────────────────────────────────
+
+test('store --generate opens GitHub for the gh account and stores the token it returns', () => {
+  const result = run('store.mjs', ['--generate', '--format', 'sh', '--no-open', '--token-stdin', '--yes'], { input: TOKEN, env: { FAKE_GH_EXPIRY: SOON() } });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /gh is signed in as: octocat \(via gh login\)/);
+  assert.match(result.stdout, /settings\/tokens\/new\?description=terminal-\d{8}&scopes=repo,/);
+  assert.match(result.stdout, /Set Expiration to 7 days/);
+  assert.match(fs.readFileSync(path.join(home, '.secrets.env'), 'utf-8'), new RegExp(`^export GITHUB_TOKEN=${TOKEN}$`, 'm'));
+  assert.ok(!result.stdout.includes(TOKEN));
+});
+
+test('store --generate refuses a token from a different account', () => {
+  const result = run('store.mjs', ['--generate', '--format', 'sh', '--no-open', '--token-stdin', '--yes'], {
+    input: TOKEN,
+    env: { FAKE_GH_EXPIRY: SOON(), FAKE_GH_TOKEN_LOGIN: 'someone-else' },
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /belongs to someone-else, but gh is signed in as octocat/);
+  assert.ok(!fs.existsSync(path.join(home, '.secrets.env')));
+});
+
+test('store --generate rejects an expiration beyond --max-days before opening GitHub', () => {
+  const result = run('store.mjs', ['--generate', '--expiration', '45', '--no-open', '--token-stdin', '--yes'], { input: TOKEN });
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /exceeds --max-days 30/);
+  assert.ok(!ghCalls().some((c) => c.args[0] === 'api'));
+});
+
+test('store validates --generate option combinations', () => {
+  assert.match(run('store.mjs', ['--generate', '--from', 'x']).stderr, /cannot be combined/);
+  assert.match(run('store.mjs', ['--scopes', 'repo']).stderr, /only applies with --generate/);
+  assert.match(run('store.mjs', ['--generate', '--no-verify']).stderr, /needs verification/);
 });

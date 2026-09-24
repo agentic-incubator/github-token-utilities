@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-09-24
+
+### Added
+
+- `store-gh-token --generate` creates and stores a token in one command. It:
+  - opens GitHub's new-token page for the account `gh` is signed in as, with scopes
+    prefilled (all 48 by default, or `--scopes`) and a dated note (`--name`), recommending a
+    7-day expiration (`--expiration`);
+  - reads the copied token from the clipboard, then clears it (macOS, Windows, Wayland, X11);
+    falls back to a hidden prompt, or use `--no-clipboard`;
+  - refuses a token that belongs to a different account than `gh`;
+  - adds or replaces `GITHUB_TOKEN` and the `GITHUB_PERSONAL_ACCESS_TOKEN` reference.
+- The current `gh` account is detected from the stored `gh` login first, so an expired
+  `GITHUB_TOKEN` in the environment doesn't get in the way.
+
+### Fixed
+
+- Documentation said the classic `default` scope set had 51 scopes; it has 48. The generator
+  now computes the number.
+
 ## [3.0.0] - 2026-09-24
 
 > [!IMPORTANT]
@@ -88,4 +108,5 @@ All notable changes to this project are documented here. The format follows
 
 Initial release of `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `setup.mjs`.
 
+[3.1.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.1.0
 [3.0.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.0.0

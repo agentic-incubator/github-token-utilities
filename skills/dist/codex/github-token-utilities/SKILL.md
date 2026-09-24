@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Node.js 22+, git, and the GitHub CLI (gh) authenticated to github.com. Works on macOS, Linux and Windows; bash, zsh, sh, ksh, dash, fish, csh/tcsh and PowerShell."
 metadata:
   author: "agentic-incubator"
-  version: "3.0.0"
+  version: "3.1.0"
   repository: "https://github.com/agentic-incubator/github-token-utilities"
   short-description: "Audit, rotate and generate GitHub tokens"
 ---

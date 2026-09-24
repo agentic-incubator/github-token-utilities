@@ -6,6 +6,7 @@ import fs from 'fs';
 import { spawn } from 'child_process';
 import readline from 'readline';
 import {
+  DEFAULT_SCOPES,
   FINE_GRAINED_MAX_DAYS,
   buildClassicUrl,
   buildFineGrainedUrl,
@@ -14,68 +15,6 @@ import {
   validateTokenName,
   verifyToken,
 } from './gh-token-lib.mjs';
-
-const DEFAULT_SCOPES = [
-  // Repositories
-  'repo',
-  'repo:status',
-  'repo_deployment',
-  'public_repo',
-  'repo:invite',
-  // Workflows & Automation
-  'workflow',
-  'security_events',
-  // Package Management
-  'write:packages',
-  'read:packages',
-  'delete:packages',
-  // Organization & Team Management
-  'admin:org',
-  'write:org',
-  'read:org',
-  'manage_runners:org',
-  // Keys & Security
-  'admin:public_key',
-  'write:public_key',
-  'read:public_key',
-  'admin:gpg_key',
-  'write:gpg_key',
-  'read:gpg_key',
-  'admin:ssh_signing_key',
-  'write:ssh_signing_key',
-  'read:ssh_signing_key',
-  // Webhooks & Hooks
-  'admin:repo_hook',
-  'write:repo_hook',
-  'read:repo_hook',
-  'admin:org_hook',
-  // User & Account
-  'gist',
-  'notifications',
-  'user',
-  'read:user',
-  'user:email',
-  'user:follow',
-  'delete_repo',
-  // Discussions & Collaboration
-  'write:discussion',
-  'read:discussion',
-  // Enterprise
-  'admin:enterprise',
-  'manage_runners:enterprise',
-  'read:enterprise',
-  // Auditing & Logging
-  'audit_log',
-  'read:audit_log',
-  // Advanced Features
-  'codespace',
-  'copilot',
-  'manage_billing:copilot',
-  'write:network_configurations',
-  'read:network_configurations',
-  'project',
-  'read:project',
-];
 
 const SCOPE_DESCRIPTIONS = {
   repo: 'Full control of private repositories',
@@ -170,7 +109,7 @@ Options (any omitted option is asked interactively):
   --expiration <days>    Lifetime in days (fine-grained: 1-366, prefilled on GitHub)
 
   Classic tokens:
-  --scopes <list>        Comma-separated scopes, or "default" (all 51) or "none"
+  --scopes <list>        Comma-separated scopes, or "default" (all ${DEFAULT_SCOPES.length}) or "none"
 
   Fine-grained tokens:
   --permissions <list>   e.g. contents=write,workflows=write (levels: read, write, admin)
@@ -316,7 +255,7 @@ async function selectExpiration() {
 async function selectScopes() {
   console.log('\n🎯 Scope Selection\n');
   console.log('Choose how to configure scopes:');
-  console.log('1. Use default scopes (51 total — very broad, includes delete_repo and admin:*)');
+  console.log(`1. Use default scopes (${DEFAULT_SCOPES.length} total — very broad, includes delete_repo and admin:*)`);
   console.log('2. Customize scopes interactively');
   console.log('3. Start with no scopes\n');
 

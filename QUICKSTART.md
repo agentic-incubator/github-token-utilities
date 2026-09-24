@@ -76,12 +76,12 @@ rotate-gh-token OWNER/REPO GH_TOKEN --existing my-first-token # replace the secr
 ## 6. Keep a short-lived token in your terminal (optional)
 
 ```bash
-gen-gh-token --type classic --name terminal --scopes repo,workflow,read:org --expiration 7
-store-gh-token --from terminal --dry-run
-store-gh-token --from terminal --ensure-loaded
+store-gh-token --generate --expiration 7 --ensure-loaded
 ```
 
-This writes `GITHUB_TOKEN` (and `GITHUB_PERSONAL_ACCESS_TOKEN`, which references it) into
+This opens GitHub for the account `gh` is signed in as, with every classic scope prefilled.
+Set the expiration, click **Generate token** and copy it, then press Enter. The token is read
+from your clipboard and never shown. The command writes `GITHUB_TOKEN` (and `GITHUB_PERSONAL_ACCESS_TOKEN`, which references it) into
 `~/.secrets.env`. fish, csh/tcsh and PowerShell users get their own format and file
 automatically. Repeat before the token expires; `audit-gh-tokens --no-remote` warns a week
 ahead.

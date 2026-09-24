@@ -4,8 +4,12 @@ import os from 'os';
 import path from 'path';
 import fs from 'fs';
 import readline from 'readline';
+import { spawn } from 'child_process';
 import {
+  DEFAULT_SCOPES,
   ENV_FORMATS,
+  buildClassicUrl,
+  currentGhLogin,
   defaultEnvFile,
   detectEnvFormat,
   expiryStatus,
@@ -14,6 +18,7 @@ import {
   isFileLoaded,
   isSafeEnvValue,
   maskToken,
+  readClipboard,
   readEnvAssignment,
   restrictToOwner,
   upsertEnvToken,
@@ -40,8 +45,20 @@ The file format follows your OS and shell:
   PowerShell (default on Windows)      ~\\.secrets.ps1                       $env:KEY = 'value'
 
 Token source (default: hidden prompt):
+  --generate             Create a new classic token for the account gh is signed in as:
+                         opens GitHub with the scopes prefilled; you set the expiration,
+                         click "Generate token" and copy it; the token is read from the
+                         clipboard (then cleared), checked to belong to that account, and
+                         stored. No pasting, nothing displayed.
   --from <name>          Use the token saved by gen-gh-token in ~/<name>.ght
   --token-stdin          Read the token from stdin
+
+With --generate:
+  --expiration <days>    Expiration to set on GitHub (default 7; must be <= --max-days)
+  --scopes <list>        Comma-separated scopes, or "default" (all ${DEFAULT_SCOPES.length}; the default)
+  --name <note>          Token note on GitHub (default terminal-<yyyymmdd>)
+  --no-open              Print the URL instead of opening a browser
+  --no-clipboard         Paste the token at a hidden prompt instead of reading the clipboard
 
 Options:
   --file <path>          Secrets file (default depends on --format)
@@ -70,7 +87,13 @@ function parseArgs(argv) {
       if (value === undefined) throw new Error(`${arg} requires a value`);
       return value;
     };
-    if (arg === '--from') opts.from = next();
+    if (arg === '--generate') opts.generate = true;
+    else if (arg === '--expiration') opts.expiration = parseInt(next(), 10);
+    else if (arg === '--scopes') opts.scopes = next();
+    else if (arg === '--name') opts.name = next();
+    else if (arg === '--no-open') opts.open = false;
+    else if (arg === '--no-clipboard') opts.clipboard = false;
+    else if (arg === '--from') opts.from = next();
     else if (arg === '--token-stdin') opts.tokenStdin = true;
     else if (arg === '--file') opts.file = next();
     else if (arg === '--format') opts.format = next();
@@ -94,7 +117,20 @@ function parseArgs(argv) {
   if (!isEnvKey(opts.primary) || !opts.aliases.every(isEnvKey)) throw new Error('Variable names must match [A-Za-z_][A-Za-z0-9_]*');
   if (opts.aliases.includes(opts.primary)) throw new Error('--alias cannot be the same as --key');
   if (!Number.isInteger(opts.maxDays) || opts.maxDays <= 0) throw new Error('--max-days must be a positive integer');
-  if (opts.from && opts.tokenStdin) throw new Error('Use either --from or --token-stdin, not both');
+  if (opts.from && (opts.tokenStdin || opts.generate)) throw new Error('--from cannot be combined with --token-stdin or --generate');
+  const generateOnly = ['expiration', 'scopes', 'name'].filter((k) => opts[k] !== undefined);
+  if (!opts.generate && generateOnly.length) throw new Error(`--${generateOnly[0]} only applies with --generate`);
+  if (opts.generate) {
+    opts.expiration ??= 7;
+    opts.scopes ??= 'default';
+    opts.name ??= `terminal-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+    opts.open ??= true;
+    opts.clipboard ??= true;
+    if (!Number.isInteger(opts.expiration) || opts.expiration <= 0) throw new Error('--expiration must be a positive number of days');
+    const nameError = validateTokenName(opts.name);
+    if (nameError) throw new Error(`--name: ${nameError}`);
+    if (!opts.verify) throw new Error('--generate needs verification to confirm the token belongs to your gh account; drop --no-verify');
+  }
   if (opts.from) {
     const error = validateTokenName(opts.from);
     if (error) throw new Error(`--from: ${error}`);
@@ -163,6 +199,69 @@ function loaderPath(file, home, format) {
   return format === 'powershell' ? `$HOME\\${rel.replace(/\//g, '\\')}` : `$HOME/${rel}`;
 }
 
+function openBrowser(url) {
+  const [cmd, args] =
+    process.platform === 'darwin' ? ['open', [url]]
+      : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+        : ['xdg-open', [url]];
+  try {
+    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    child.on('error', () => {});
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseScopeList(value) {
+  if (value.trim().toLowerCase() === 'default') return [...DEFAULT_SCOPES];
+  return [...new Set(value.split(',').map((x) => x.trim()).filter(Boolean))];
+}
+
+// --generate: open GitHub for the account gh is signed in as, then collect the new token
+// from the clipboard (or stdin / a hidden prompt) without ever displaying it.
+async function generateToken(opts) {
+  const account = currentGhLogin();
+  if (!account) {
+    console.log('❌ gh is not signed in. Run: gh auth login\n');
+    return null;
+  }
+  console.log(`👤 gh is signed in as: ${account.login} (via ${account.source})`);
+
+  const scopes = parseScopeList(opts.scopes);
+  const url = buildClassicUrl(opts.name, scopes);
+  const expiresOn = new Date(Date.now() + opts.expiration * 86400000).toISOString().slice(0, 10);
+  console.log(`🌐 Create the token on GitHub (${scopes.length} scopes prefilled, note "${opts.name}"):\n`);
+  console.log(`   ${url}\n`);
+  console.log(`   1. Make sure the browser is signed in to GitHub as ${account.login}.`);
+  console.log(`   2. Set Expiration to ${opts.expiration} days (≈ ${expiresOn}); GitHub can't prefill it.`);
+  console.log('   3. Click "Generate token", then click the copy icon next to the new token.\n');
+  if (opts.open && openBrowser(url)) console.log('   (Opened in your browser.)\n');
+
+  let token = null;
+  if (opts.tokenStdin) {
+    token = await readStdin();
+  } else {
+    if (!process.stdin.isTTY) {
+      console.log('❌ --generate needs an interactive terminal (or --token-stdin).\n');
+      return null;
+    }
+    if (opts.clipboard) {
+      await question('Press Enter once the token is copied... ');
+      const clip = readClipboard();
+      if (clip && /^(ghp_|github_pat_)/.test(clip.text)) {
+        token = clip.text;
+        console.log(clip.clear() ? '🧹 Read the token from the clipboard and cleared it.' : '📋 Read the token from the clipboard (clear it yourself).');
+      } else {
+        console.log(clip ? '⚠️  The clipboard does not hold a GitHub token.' : '⚠️  No clipboard tool available here.');
+      }
+    }
+    token ??= await hiddenQuestion('Paste the token here instead (input hidden): ');
+  }
+  return token ? { token, expectedLogin: account.login } : null;
+}
+
 function describeExpiry(check) {
   const status = expiryStatus({ expiresAt: check.expiresAt, type: check.type });
   if (status.status === 'NO_EXPIRATION') return { ...status, text: 'never expires' };
@@ -202,7 +301,16 @@ async function main() {
 
   // 1. Get the new token without ever echoing it.
   let token;
-  if (opts.from) {
+  let expectedLogin = null;
+  if (opts.generate) {
+    if (opts.expiration > opts.maxDays && !opts.force) {
+      console.log(`❌ --expiration ${opts.expiration} exceeds --max-days ${opts.maxDays}.\n`);
+      return 1;
+    }
+    const generated = await generateToken(opts);
+    if (!generated) return 1;
+    ({ token, expectedLogin } = generated);
+  } else if (opts.from) {
     const source = path.join(home, `${opts.from}.ght`);
     if (!fs.existsSync(source)) {
       console.log(`❌ Token file not found: ${source}\n`);
@@ -233,6 +341,12 @@ async function main() {
     }
     const expiry = describeExpiry(check);
     console.log(`✅ ${check.type} token for ${check.login ?? '(unknown user)'}, ${expiry.text}`);
+    if (expectedLogin && check.login !== expectedLogin) {
+      console.log(`\n❌ That token belongs to ${check.login}, but gh is signed in as ${expectedLogin}.`);
+      console.log('   The browser was probably signed in to a different GitHub account. Nothing was written;');
+      console.log('   delete that token at https://github.com/settings/tokens and try again.\n');
+      return 1;
+    }
     if (check.scopes !== null) console.log(`   Scopes: ${check.scopes || '(none)'}`);
     const tooLong = expiry.status === 'NO_EXPIRATION' || (expiry.days !== null && expiry.days > opts.maxDays);
     if (tooLong && !opts.force) {
@@ -282,7 +396,9 @@ async function main() {
     return 0;
   }
 
-  if (!opts.yes) {
+  // With --generate the user has just created the token for this purpose; the plan above
+  // and the backup below are the safety net, so don't ask twice.
+  if (!opts.yes && !opts.generate) {
     if (!process.stdin.isTTY || opts.tokenStdin) {
       console.log('❌ Confirmation needed: re-run with --yes (or --dry-run to preview).\n');
       return 1;
