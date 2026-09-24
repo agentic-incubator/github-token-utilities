@@ -22,7 +22,8 @@
     "validate:skills": "node scripts/build-skills.mjs --check && for d in skills/dist/*/github-token-utilities; do uvx --from skills-ref agentskills validate \"$d\" || exit 1; done",
     "store": "node store.mjs",
     "package": "node scripts/package-release.mjs",
-    "revoke": "node revoke.mjs"
+    "revoke": "node revoke.mjs",
+    "check:links": "node scripts/check-links.mjs"
   },
   "keywords": [
     "github",
@@ -53,7 +54,7 @@
     "type": "git",
     "url": "git+https://github.com/agentic-incubator/github-token-utilities.git"
   },
-  "homepage": "https://github.com/agentic-incubator/github-token-utilities#readme",
+  "homepage": "https://github.com/agentic-incubator/github-token-utilities",
   "bugs": {
     "url": "https://github.com/agentic-incubator/github-token-utilities/issues"
   },

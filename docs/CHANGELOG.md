@@ -17,6 +17,14 @@ All notable changes to this project are documented here. The format follows
   CHANGELOG). `PROJECT_STRUCTURE.md` became `docs/PROJECT-STRUCTURE.md`.
 - `tests/docs.test.mjs` fails the build if any Markdown link, anchor or footnote breaks, or if
   a document breaks the naming convention.
+- `npm run check:links` (and the weekly `links.yml` workflow) checks every external URL and
+  `#fragment` in the docs, skill sources and code comments.
+
+### Fixed
+
+- `package.json` homepage used `#readme`, an anchor GitHub no longer renders.
+- The CHANGELOG linked to a `v3.0.0` release that was never tagged; it now links to the
+  commit that shipped it.
 
 ## [3.2.0] - 2026-09-24
 
@@ -157,4 +165,4 @@ Initial release of `gen-gh-token`, `audit-gh-tokens`, `rotate-gh-token` and `set
 [Unreleased]: https://github.com/agentic-incubator/github-token-utilities/compare/v3.2.0...HEAD
 [3.2.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.2.0
 [3.1.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.1.0
-[3.0.0]: https://github.com/agentic-incubator/github-token-utilities/releases/tag/v3.0.0
+[3.0.0]: https://github.com/agentic-incubator/github-token-utilities/tree/febb16c

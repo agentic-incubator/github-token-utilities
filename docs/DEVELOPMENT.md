@@ -28,6 +28,21 @@ variant against the Agent Skills rules[^agentskills-spec]:
 
 See [PROJECT_STRUCTURE.md](PROJECT-STRUCTURE.md) for a map of the repository.
 
+## Link integrity
+
+Two checks keep the documentation's links working:
+
+- **Internal links** (between `README.md` and `docs/`, and to files in the repository):
+  `tests/docs.test.mjs` runs with `npm test`. It fails on any missing file, any `#anchor`
+  that doesn't match a heading (using GitHub's anchor rules), any undefined or unused
+  footnote, and any `docs/` file whose name isn't uppercase.
+- **External links** in the docs, the skill sources and code comments:
+  `npm run check:links` requests every URL, follows redirects, and fails on HTTP errors and
+  on `#fragments` missing from the page. It needs the network, so it runs outside `npm test`:
+  weekly, on documentation changes pushed to `main`, and on demand, in
+  [`links.yml`](../.github/workflows/links.yml). Pages behind a sign-in
+  (`github.com/settings/…`) can't be checked anonymously and are skipped.
+
 ## Releasing
 
 1. Bump `version` in `package.json`, and add a matching `## [x.y.z]` section to
