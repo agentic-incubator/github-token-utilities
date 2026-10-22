@@ -22,8 +22,8 @@ Version **3.4.0**. See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 The GitHub Actions used in CI are pinned to commit SHAs: `actions/checkout` v7.0.1,
 `actions/setup-node` v7.0.0, `astral-sh/setup-uv` v10.2.0.
-[Dependabot](../.github/dependabot.yml) checks them (and npm) every week and opens grouped
-update PRs that bump each SHA and its version comment together.[^dependabot]
+[Renovate](../renovate.json) checks them (and npm) every week and opens grouped
+update PRs that bump each SHA and its version comment together.[^renovate]
 
 [^node-releases]: Node.js release schedule: Node 20 reached end-of-life on 2026-04-30; 22 is supported until 2027-04-30. <https://github.com/nodejs/Release#release-schedule>
-[^dependabot]: GitHub Docs, *Dependabot options reference* (`package-ecosystem`, `schedule.interval`, `groups`). <https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference>
+[^renovate]: Renovate Docs, *Configuration options* (`schedule`, `groupName`, `packageRules`). <https://docs.renovatebot.com/configuration-options/>
